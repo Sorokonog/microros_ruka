@@ -35,11 +35,8 @@ int main(int argc, char** argv)
     eprosima::uxr::Middleware::Kind mw_kind(eprosima::uxr::Middleware::Kind::FASTDDS);
     
     struct pollfd poll_fd;
-    struct pollfd poll_fd_w;
     struct sockaddr_can addr;
-    struct sockaddr_can addr_w;
     struct ifreq ifr;
-    struct ifreq ifr_w;
 
     /**
      * @brief Agent's initialization behaviour description.
@@ -50,21 +47,13 @@ int main(int argc, char** argv)
         struct canfd_frame frame;
         struct can_frame rec_frame;
 
-
         bool rv = false;
-        //poll_fd.fd = socket(PF_CAN, SOCK_RAW, CAN_RAW);
 
         if ((poll_fd.fd = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) 
         {
 		perror("socket creation: ");
 		return false;
         }
-
-        if ((poll_fd_w.fd = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) 
-        {
-		perror("socket creation: ");
-		return false;
-	    }
         
         if (-1 != poll_fd.fd)
         {
@@ -85,25 +74,6 @@ int main(int argc, char** argv)
                 perror("socket bind: ");
             }
         }
-        else
-        {
-            perror("socket fail: ");
-        }
-
-        if (-1 != poll_fd_w.fd)
-        {
-            struct sockaddr_in address{};
-
-            strcpy(ifr_w.ifr_name, "can1");
-            ioctl(poll_fd_w.fd, SIOCGIFINDEX, &ifr_w);
-            
-            poll_fd_w.events = POLLOUT;
-            addr_w.can_family  = AF_CAN;
-            addr_w.can_ifindex = ifr_w.ifr_ifindex;
-            setsockopt(poll_fd_w.fd, SOL_CAN_RAW, CAN_RAW_FILTER, NULL, 0);
-            if (-1 != bind(poll_fd_w.fd,
-                           (struct sockaddr *)&addr_w,
-                           sizeof(addr_w)))
             {
                 rv = true;
                 UXR_AGENT_LOG_INFO(
@@ -112,12 +82,6 @@ int main(int argc, char** argv)
                     "fd: {}",
                     poll_fd.fd);
             }
-            else
-            {
-                perror("socket bind: ");
-            }
-        }
-
         return rv;
     };
 
@@ -160,10 +124,9 @@ int main(int argc, char** argv)
             eprosima::uxr::TransportRc& transport_rc) -> ssize_t
     {
         struct canfd_frame frame;
-        //socklen_t len = sizeof(addr);
         uint16_t rv;
         rv = 8;
-        //rv = recvfrom(poll_fd.fd, &frame, sizeof(struct canfd_frame),
+        //rv = recvfrom(poll_fd.fd, &frame, sizeof(struct canfd_frame), //TODO add poll to get free fd
         //          0, (struct sockaddr*)&addr, &len);
         read(poll_fd.fd,&frame,sizeof(struct canfd_frame));
         memcpy(buffer,&(frame.data),rv);
@@ -199,7 +162,7 @@ int main(int argc, char** argv)
             //TODO add poll to get free fd
             frame.can_dlc = 8;
             memcpy(&(frame.data),ptr,frame.can_dlc);
-            rv = write(poll_fd_w.fd, &frame, sizeof(struct can_frame));
+            rv = write(poll_fd.fd, &frame, sizeof(struct can_frame));
             if (rv != -1)
             {
                 bytes_sent += 8;
@@ -210,7 +173,7 @@ int main(int argc, char** argv)
         {
             frame.can_dlc = rest;
             memcpy(&(frame.data),ptr,frame.can_dlc);
-            rv = write(poll_fd_w.fd,&frame,sizeof(can_frame));
+            rv = write(poll_fd.fd,&frame,sizeof(can_frame));
             if (rv != -1)
             {
                 bytes_sent += rest;
