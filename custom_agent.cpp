@@ -33,44 +33,88 @@
 int main(int argc, char** argv)
 {
     eprosima::uxr::Middleware::Kind mw_kind(eprosima::uxr::Middleware::Kind::FASTDDS);
+    
     struct pollfd poll_fd;
-
+    struct pollfd poll_fd_w;
+    struct sockaddr_can addr;
+    struct sockaddr_can addr_w;
+    struct ifreq ifr;
+    struct ifreq ifr_w;
 
     /**
      * @brief Agent's initialization behaviour description.
      */
     eprosima::uxr::CustomAgent::InitFunction init_function = [&]() -> bool
     {
-        struct sockaddr_can addr;
-        struct can_frame frame;
+        //struct sockaddr_can addr;
+        struct canfd_frame frame;
         struct can_frame rec_frame;
-        struct ifreq ifr;
+
 
         bool rv = false;
-        poll_fd.fd = socket(PF_CAN, SOCK_RAW, CAN_RAW);
+        //poll_fd.fd = socket(PF_CAN, SOCK_RAW, CAN_RAW);
+
+        if ((poll_fd.fd = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) 
+        {
+		perror("socket creation: ");
+		return false;
+        }
+
+        if ((poll_fd_w.fd = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) 
+        {
+		perror("socket creation: ");
+		return false;
+	    }
         
         if (-1 != poll_fd.fd)
         {
             struct sockaddr_in address{};
-
             strcpy(ifr.ifr_name, "can0");
             ioctl(poll_fd.fd, SIOCGIFINDEX, &ifr);
-    
+            poll_fd.events = POLLIN;
             addr.can_family  = AF_CAN;
             addr.can_ifindex = ifr.ifr_ifindex;
-
             if (-1 != bind(poll_fd.fd,
-                           (struct sockaddr *)&addr,
-                           sizeof(addr)))
+                (struct sockaddr *)&addr,
+                sizeof(addr)))
+                {
+                    rv = true;
+                }
+            else
             {
-                poll_fd.events = POLLIN;
-                rv = true;
+                perror("socket bind: ");
+            }
+        }
+        else
+        {
+            perror("socket fail: ");
+        }
 
+        if (-1 != poll_fd_w.fd)
+        {
+            struct sockaddr_in address{};
+
+            strcpy(ifr_w.ifr_name, "can1");
+            ioctl(poll_fd_w.fd, SIOCGIFINDEX, &ifr_w);
+            
+            poll_fd_w.events = POLLOUT;
+            addr_w.can_family  = AF_CAN;
+            addr_w.can_ifindex = ifr_w.ifr_ifindex;
+            setsockopt(poll_fd_w.fd, SOL_CAN_RAW, CAN_RAW_FILTER, NULL, 0);
+            if (-1 != bind(poll_fd_w.fd,
+                           (struct sockaddr *)&addr_w,
+                           sizeof(addr_w)))
+            {
+                rv = true;
                 UXR_AGENT_LOG_INFO(
                     UXR_DECORATE_GREEN(
                         "This is an example of a custom Micro XRCE-DDS Agent INIT function"),
                     "fd: {}",
                     poll_fd.fd);
+            }
+            else
+            {
+                perror("socket bind: ");
             }
         }
 
@@ -116,8 +160,11 @@ int main(int argc, char** argv)
             eprosima::uxr::TransportRc& transport_rc) -> ssize_t
     {
         struct canfd_frame frame;
+        //socklen_t len = sizeof(addr);
         uint16_t rv;
         rv = 8;
+        //rv = recvfrom(poll_fd.fd, &frame, sizeof(struct canfd_frame),
+        //          0, (struct sockaddr*)&addr, &len);
         read(poll_fd.fd,&frame,sizeof(struct canfd_frame));
         memcpy(buffer,&(frame.data),rv);
         source_endpoint->set_member_value<uint32_t>("ID",frame.can_id);
@@ -134,21 +181,38 @@ int main(int argc, char** argv)
         size_t message_length,
         eprosima::uxr::TransportRc& transport_rc) -> ssize_t
     {
+        struct can_frame frame;
 
-        struct canfd_frame frame;
-
-        uint16_t rv;
+        int rv;
         //frame.can_id = frame.can_id | (destination_endpoint->get_addr());
         //frame.can_id = frame.can_id = destination_endpoint->get_member<uint32_t>("ID");
         //frame.can_id = frame.can_id | (0 << 29); //data frame
         //frame.can_id = frame.can_id | (0 << 30); //standard
         //frame.can_id = frame.can_id | (0 << 31); // 11 bit ID
 
-        frame.can_id = 12;
-        rv = (message_length > 8)? 8 : message_length;
-        std::cout<<"message_length: "<<message_length<<std::endl;
+        //frame.can_id = 12;
+        //rv = (message_length > 8)? 8 : message_length;
+        std::cout<<"writing to: "<<poll_fd_w.fd<<std::endl;
+
+        int rdy = poll(&poll_fd_w,1,100);
+        if (rdy == 1)
+        {
+        perror("poll: ");
         memcpy(&(frame.data),buffer,8);
-		rv = write(poll_fd.fd,&frame,8);
+        perror("memcpy: ");
+        rv = write(poll_fd_w.fd, &frame, sizeof(struct can_frame));
+        perror("write: ");
+        }
+        else
+        {
+        perror("polling err");
+        }
+        if(rv < 0)
+        {
+            perror("send err");
+            return 1;
+        }
+        //rv = write(poll_fd.fd, &frame , 8)
 
         std::cout<<"DATA >>>>>: ";
         for (int i =0 ; i < 8; i++)
