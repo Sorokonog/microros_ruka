@@ -182,47 +182,42 @@ int main(int argc, char** argv)
         eprosima::uxr::TransportRc& transport_rc) -> ssize_t
     {
         struct can_frame frame;
-
+        uint8_t * ptr = buffer;
         int rv;
-        //frame.can_id = frame.can_id | (destination_endpoint->get_addr());
-        //frame.can_id = frame.can_id = destination_endpoint->get_member<uint32_t>("ID");
-        //frame.can_id = frame.can_id | (0 << 29); //data frame
-        //frame.can_id = frame.can_id | (0 << 30); //standard
-        //frame.can_id = frame.can_id | (0 << 31); // 11 bit ID
 
-        //frame.can_id = 12;
-        //rv = (message_length > 8)? 8 : message_length;
-        std::cout<<"writing to: "<<poll_fd_w.fd<<std::endl;
+        ssize_t bytes_sent = 0;
+        frame.can_id = 12;
+        frame.can_dlc = 8;
 
-        int rdy = poll(&poll_fd_w,1,100);
-        if (rdy == 1)
-        {
-        perror("poll: ");
-        memcpy(&(frame.data),buffer,8);
-        perror("memcpy: ");
-        rv = write(poll_fd_w.fd, &frame, sizeof(struct can_frame));
-        perror("write: ");
-        }
-        else
-        {
-        perror("polling err");
-        }
-        if(rv < 0)
-        {
-            perror("send err");
-            return 1;
-        }
-        //rv = write(poll_fd.fd, &frame , 8)
+        uint16_t cycle, rest;
+        
+        cycle = message_length / frame.can_dlc;
+        rest = message_length % frame.can_dlc;
 
-        std::cout<<"DATA >>>>>: ";
-        for (int i =0 ; i < 8; i++)
+        for(cycle; cycle>0; cycle--)
         {
-            std::cout<<frame.data[i];
+            //TODO add poll to get free fd
+            frame.can_dlc = 8;
+            memcpy(&(frame.data),ptr,frame.can_dlc);
+            rv = write(poll_fd_w.fd, &frame, sizeof(struct can_frame));
+            if (rv != -1)
+            {
+                bytes_sent += 8;
+            }
+            ptr += 8;
         }
-        std::cout<<" :<<<<< DATA"<<std::endl;
-        std::cout<<"rv: "<<rv<<std::endl;
+        if (rest!=0)
+        {
+            frame.can_dlc = rest;
+            memcpy(&(frame.data),ptr,frame.can_dlc);
+            rv = write(poll_fd_w.fd,&frame,sizeof(can_frame));
+            if (rv != -1)
+            {
+                bytes_sent += rest;
+            }    
+        }
         transport_rc = eprosima::uxr::TransportRc::ok;
-        return rv;
+        return bytes_sent;
     };
 
     /**
