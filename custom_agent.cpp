@@ -123,16 +123,20 @@ int main(int argc, char** argv)
             int timeout,
             eprosima::uxr::TransportRc& transport_rc) -> ssize_t
     {
-        struct canfd_frame frame;
-        uint16_t rv;
-        rv = 8;
-        //rv = recvfrom(poll_fd.fd, &frame, sizeof(struct canfd_frame), //TODO add poll to get free fd
-        //          0, (struct sockaddr*)&addr, &len);
-        read(poll_fd.fd,&frame,sizeof(struct canfd_frame));
-        memcpy(buffer,&(frame.data),rv);
-        source_endpoint->set_member_value<uint32_t>("ID",frame.can_id);
-        transport_rc = eprosima::uxr::TransportRc::ok;
-        return rv;
+        struct can_frame frame;
+        read(poll_fd.fd,&frame,sizeof(struct can_frame));
+        if (frame.can_id == 15)
+        {
+            memcpy(buffer,&(frame.data),static_cast<int>(frame.can_dlc));
+            source_endpoint->set_member_value<uint32_t>("ID",frame.can_id);
+            transport_rc = eprosima::uxr::TransportRc::ok;
+            return static_cast<int>(frame.can_dlc);
+        }
+        else
+        {
+            perror("wrong ID");
+            return -1;
+        }
     };
 
     /**
@@ -169,11 +173,11 @@ int main(int argc, char** argv)
             }
             ptr += 8;
         }
-        if (rest!=0)
+        if (rest != 0)
         {
             frame.can_dlc = rest;
-            memcpy(&(frame.data),ptr,frame.can_dlc);
-            rv = write(poll_fd.fd,&frame,sizeof(can_frame));
+            memcpy(&(frame.data), ptr, rest);
+            rv = write(poll_fd.fd, &frame,  sizeof(struct can_frame));
             if (rv != -1)
             {
                 bytes_sent += rest;
