@@ -17,14 +17,18 @@
 uint64_t can_head = 0;
 uint32_t can_tail = 0;
 uint8_t can_buffer[CAN_IT_BUFFER_SIZE];
+CAN_HandleTypeDef * can;
+
+HAL_StatusTypeDef ret = HAL_ERROR;
 
 extern uint8_t TxData[8];					// Data to be sent via CAN
 extern uint64_t TxMailbox;					// CAN temporary mailbox. Required by HAL function
 extern CAN_TxHeaderTypeDef TxHeader;		// Header for can message
 extern CAN_FilterTypeDef canfilterconfig;	// Filter for receiving CAN messages
-
+extern CAN_RxHeaderTypeDef RxHeader;
 
 bool cubemx_transport_open(struct uxrCustomTransport * transport){
+	can = (CAN_HandleTypeDef*) transport->args;
     return true;
 }
 
@@ -33,9 +37,6 @@ bool cubemx_transport_close(struct uxrCustomTransport * transport){
 }
 
 size_t cubemx_transport_write(struct uxrCustomTransport* transport, uint8_t * buf, size_t len, uint8_t * err){
-
-	CAN_HandleTypeDef * can = (CAN_HandleTypeDef*) transport->args;
-    HAL_StatusTypeDef ret = HAL_ERROR;
     uint8_t rv = 0;
 
     rv = (len < 8) ? len : 8;
@@ -60,11 +61,7 @@ size_t cubemx_transport_read(struct uxrCustomTransport* transport, uint8_t* buf,
 
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
-
-HAL_StatusTypeDef ret = HAL_ERROR;
-CAN_RxHeaderTypeDef RxHeader;
 uint8_t data[8];
-
 ret = HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, data);
 
 if (ret != HAL_OK)
@@ -88,3 +85,4 @@ if (RxHeader.StdId == ROUTER_ID)
 
 
 #endif //RMW_UXRCE_TRANSPORT_CUSTOM
+

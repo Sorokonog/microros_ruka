@@ -124,13 +124,16 @@ int main(int argc, char** argv)
             eprosima::uxr::TransportRc& transport_rc) -> ssize_t
     {
         struct can_frame frame;
+        uint16_t rv;
+        rv = 8;
+
         read(poll_fd.fd,&frame,sizeof(struct can_frame));
         if (frame.can_id == 15)
         {
-            memcpy(buffer,&(frame.data),static_cast<int>(frame.can_dlc));
+            memcpy(buffer,&(frame.data),frame.can_dlc);
             source_endpoint->set_member_value<uint32_t>("ID",frame.can_id);
             transport_rc = eprosima::uxr::TransportRc::ok;
-            return static_cast<int>(frame.can_dlc);
+            return frame.can_dlc;
         }
         else
         {
@@ -164,9 +167,8 @@ int main(int argc, char** argv)
         for(cycle; cycle>0; cycle--)
         {
             //TODO add poll to get free fd
-            frame.can_dlc = 8;
-            memcpy(&(frame.data),ptr,frame.can_dlc);
-            rv = write(poll_fd.fd, &frame, sizeof(struct can_frame));
+            memcpy(&(frame.data),ptr,8);
+            rv = write(poll_fd.fd, &frame, 16);
             if (rv != -1)
             {
                 bytes_sent += 8;
@@ -177,7 +179,7 @@ int main(int argc, char** argv)
         {
             frame.can_dlc = rest;
             memcpy(&(frame.data), ptr, rest);
-            rv = write(poll_fd.fd, &frame,  sizeof(struct can_frame));
+            rv = write(poll_fd.fd, &frame,  16);
             if (rv != -1)
             {
                 bytes_sent += rest;
@@ -213,7 +215,7 @@ int main(int argc, char** argv)
         /**
          * Set verbosity level
          */
-        custom_agent.set_verbose_level(6);
+        custom_agent.set_verbose_level(0);
 
         /**
          * Run agent and wait until receiving an stop signal.
