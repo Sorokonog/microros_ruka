@@ -1,6 +1,7 @@
 #include <uxr/agent/transport/custom/CustomAgent.hpp>
 #include <uxr/agent/transport/endpoint/CustomEndPoint.hpp>
 
+#include <sys/time.h>
 
 #include <poll.h>
 #include <sys/socket.h>
@@ -29,6 +30,7 @@
  * `eprosima::uxr::IPv4EndPoint` by the library.
  * Other transport protocols might need to implement their own endpoint struct.
  */
+int64_t time_ms(void);
 
 int main(int argc, char** argv)
 {
@@ -125,21 +127,23 @@ int main(int argc, char** argv)
     {
         struct can_frame frame;
         uint16_t rv;
-        rv = 8;
+        rv = 0;
+        int64_t start = time_ms();
 
-        read(poll_fd.fd,&frame,sizeof(struct can_frame));
-        if (frame.can_id == 15)
-        {
-            memcpy(buffer,&(frame.data),frame.can_dlc);
-            source_endpoint->set_member_value<uint32_t>("ID",frame.can_id);
-            transport_rc = eprosima::uxr::TransportRc::ok;
-            return frame.can_dlc;
+        while ((time_ms() -  start) < timeout || rv > 0)
+	    {
+            rv = poll(&poll_fd, 1, 10);
+                if (rv > 0)
+                {
+                    read(poll_fd.fd,&frame,sizeof(struct can_frame));
+                    memcpy(buffer,&(frame.data),frame.can_dlc);
+                    source_endpoint->set_member_value<uint32_t>("ID",frame.can_id);
+                    transport_rc = eprosima::uxr::TransportRc::ok;
+                    return frame.can_dlc;
+                 }
         }
-        else
-        {
-            perror("wrong ID");
-            return -1;
-        }
+        transport_rc = eprosima::uxr::TransportRc::timeout_error;
+        return -1;
     };
 
     /**
@@ -166,7 +170,6 @@ int main(int argc, char** argv)
 
         for(cycle; cycle>0; cycle--)
         {
-            //TODO add poll to get free fd
             memcpy(&(frame.data),ptr,8);
             rv = write(poll_fd.fd, &frame, 16);
             if (rv != -1)
@@ -237,4 +240,11 @@ int main(int argc, char** argv)
         std::cout << e.what() << std::endl;
         return 1;
     }
+}
+
+int64_t time_ms(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (int64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
