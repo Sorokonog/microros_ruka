@@ -21,6 +21,9 @@
 #include "tim.h"
 
 /* USER CODE BEGIN 0 */
+extern uint32_t pwm_tick_counter;
+extern double angle_to_go;
+extern double curent_angle;
 
 /* USER CODE END 0 */
 
@@ -41,7 +44,7 @@ void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 1;
+  htim3.Init.Prescaler = 5;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim3.Init.Period = 60000;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -50,7 +53,7 @@ void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_OC1REF;
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
   {
@@ -138,5 +141,27 @@ void HAL_TIM_PWM_MspDeInit(TIM_HandleTypeDef* tim_pwmHandle)
 }
 
 /* USER CODE BEGIN 1 */
+
+
+void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
+{
+	  if(htim->Instance == TIM3)
+	  {
+		  if (curent_angle < angle_to_go)
+		  {
+			  TIM3->CCR1 = 30000;
+		  }
+		  else
+		  {
+			  TIM3->CCR1 = 0;
+		  }
+		  if (TIM3->CCR1 != 0)
+		  {
+			  pwm_tick_counter++; //TODO ticks * stepper_denominator
+		  }
+	  }
+}
+
+
 
 /* USER CODE END 1 */
