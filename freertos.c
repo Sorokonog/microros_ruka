@@ -64,7 +64,7 @@ typedef StaticTask_t osStaticThreadDef_t;
 std_msgs__msg__UInt32 msg_s, msg_p, msg;
 sensor_msgs__msg__JointState js_in, js_out;
 
-extern uint32_t pwm_tick_counter;
+extern long pwm_tick_counter;
 
 double angle_to_go = 0;
 double velocity_to_go = 0;
@@ -293,7 +293,7 @@ void StartDefaultTask(void *argument)
 	  {
 
 		js_out.position.data[0] = curent_angle;
-		js_out.velocity.data[0] = velocity_to_go;
+		js_out.velocity.data[0] = pwm_tick_counter;
 		js_out.effort.data[0] = effort_to_go;
 
 		rcl_ret_t ret = rcl_publish(&publisher, &js_out, NULL);
@@ -379,3 +379,4 @@ effort_to_go = js_in->effort.data[0];
 }
 
 /* USER CODE END Application */
+

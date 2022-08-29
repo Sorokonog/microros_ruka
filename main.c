@@ -68,8 +68,8 @@ uint16_t RegAccess(uint8_t operation, uint8_t address, uint16_t value); // Sends
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-uint32_t stepper_step_denominator = 1;
-uint32_t pwm_tick_counter = 0;
+int8_t stepper_step_denominator = 8;
+long pwm_tick_counter = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -127,7 +127,7 @@ int main(void)
 	HAL_Delay(1);
 	CTRL_Reg_Set();
 
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
 
   //CAN START TODO should move it to dma_transport.c in init func
   CAN_Header_Config(&TxHeader);		// Sets header values
@@ -245,8 +245,7 @@ void CTRL_Reg_Set(){
 	uint16_t TX = 0x0000;
 	TX += (0x03 << 10); // 850 ns dead time
 	TX += (0x03 << 8); // Gain of 40
-	TX += (((int)sqrt(stepper_step_denominator)) << 3); // 1/4 stepn
-	//TX += ((int)(stepper_step_denominator) << 3); // 1/4 stepn
+	TX += (stepper_step_denominator << 3); // 1/2^8 = 1/256 step
 	TX += 0x01 ; // Enable motor
 	RegAccess(WRITE, 0x00, TX); // write CTRL Register (Address = 0x00)
 	return;
