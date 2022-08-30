@@ -21,9 +21,13 @@
 #include "tim.h"
 
 /* USER CODE BEGIN 0 */
-extern long pwm_tick_counter;
+long pwm_tick_counter = 0;
+extern double angle_by_ticks;
 extern double angle_to_go;
-extern double curent_angle;
+extern double init_angle;
+extern double kalman_angle;
+
+double koeff = 2 * M_PI / TICKS_PER_CYCLE;
 
 /* USER CODE END 0 */
 
@@ -44,9 +48,9 @@ void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 0;
+  htim3.Init.Prescaler = 1;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 250; //up to 280
+  htim3.Init.Period = 250;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
@@ -147,9 +151,9 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
 	  if(htim->Instance == TIM3)
 	  {
-		  if (curent_angle > angle_to_go)
+		  if (kalman_angle < angle_to_go)
 		  {
-			  TIM3->CCR1 = 125;
+			  TIM3->CCR1 = 160;
 		  }
 		  else
 		  {
@@ -157,8 +161,9 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 		  }
 		  if (TIM3->CCR1 != 0)
 		  {
-			  pwm_tick_counter++;// = pwm_tick_counter - 2*(GPIOC->ODR & GPIO_PIN_7) + 1; //TODO ticks * stepper_denominator
+			  pwm_tick_counter = pwm_tick_counter - 2*((GPIOC->ODR & GPIO_PIN_7)>>7) + 1;
 		  }
+		  angle_by_ticks = init_angle + pwm_tick_counter * koeff;
 	  }
 }
 
