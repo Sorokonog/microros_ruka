@@ -59,19 +59,43 @@ typedef StaticTask_t osStaticThreadDef_t;
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
+//i2c vars
+HAL_StatusTypeDef i2c_ret;
+uint8_t buf[12];	// temporaty buffer for i2c message transmition
+uint8_t buf_recv[12];	// temporaty buffer for i2c message reception
 
 // ROS entities
 std_msgs__msg__UInt32 msg_s, msg_p, msg;
 sensor_msgs__msg__JointState js_in, js_out;
 
 extern long pwm_tick_counter;
+long ticks_to_go = 0;
+long pwm_timer_period = 249;
+long pwm_pulse_period = 124;
+
 
 double angle_to_go = 0;
 double velocity_to_go = 0;
 double effort_to_go = 0;
-double curent_angle; //TODO Kalman angle
+double kalman_angle;
+
+double prev_kalman_angle = 0;
+double curent_kalman_angle = 0;
+
+double encoder_angle;
+double angle_by_ticks = 0;
+double init_angle = 0;
 double curent_velocity = 0; //TODO Kalman vel
 double curent_effort = 0;
+
+
+//Kalman's coef
+float ticks_c, encoder_c;
+
+//Ticks coef
+double ticks_per_round = STEPPER_STEP_DEN * TICKS_PER_CYCLE * GEAR_RATIO;
+
+double pi_2 = 2 * M_PI;
 
 uint32_t read_fault = 0; //read fault WD
 
@@ -86,12 +110,15 @@ extern CAN_RxHeaderTypeDef   RxHeader;		// header received by can bus
 extern CAN_HandleTypeDef hcan1;
 extern I2C_HandleTypeDef hi2c1;
 
+enum State_of_motor { Stop, Go, Idle, Preempt };
+
+enum State_of_motor state_of_controller;
 
 
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
-uint32_t defaultTaskBuffer[ 3000 ];
+uint32_t defaultTaskBuffer[ 10000 ];
 osStaticThreadDef_t defaultTaskControlBlock;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
@@ -115,6 +142,13 @@ const osThreadAttr_t MotorController_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
+/* Definitions for Soft_WD_Task */
+osThreadId_t Soft_WD_TaskHandle;
+const osThreadAttr_t Soft_WD_Task_attributes = {
+  .name = "Soft_WD_Task",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -128,15 +162,17 @@ void microros_deallocate(void * pointer, void * state);
 void * microros_reallocate(void * pointer, size_t size, void * state);
 void * microros_zero_allocate(size_t number_of_elements, size_t size_of_element, void * state);
 
-void int_cb(const void *);
-double kalman_angle();
-bool create_entities();
-void destroy_entities();
+void motor_controller_cb(const void *);
+double get_kalman_angle();
+double get_encoder_angle();
+uint32_t ticks_from_angle(double angle);
+double angle_from_ticks(uint32_t ticks);
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void *argument);
-void I2CTask02(void *argument);
-void MotorControllerTask03(void *argument);
+void I2CTask01(void *argument);
+void MotorController01(void *argument);
+void Soft_WD_Task04(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -171,10 +207,13 @@ void MX_FREERTOS_Init(void) {
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
   /* creation of I2CTask */
-  I2CTaskHandle = osThreadNew(I2CTask02, NULL, &I2CTask_attributes);
+  I2CTaskHandle = osThreadNew(I2CTask01, NULL, &I2CTask_attributes);
 
   /* creation of MotorController */
-  MotorControllerHandle = osThreadNew(MotorControllerTask03, NULL, &MotorController_attributes);
+  MotorControllerHandle = osThreadNew(MotorController01, NULL, &MotorController_attributes);
+
+  /* creation of Soft_WD_Task */
+  Soft_WD_TaskHandle = osThreadNew(Soft_WD_Task04, NULL, &Soft_WD_Task_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -248,7 +287,7 @@ void StartDefaultTask(void *argument)
 
 			rc = rclc_executor_add_subscription(
 			  &executor, &subscriber, &js_in,
-			  &int_cb, ON_NEW_DATA);
+			  &motor_controller_cb, ON_NEW_DATA);
 
 			//MSG data filling
 
@@ -292,12 +331,12 @@ void StartDefaultTask(void *argument)
 	  for(;;)
 	  {
 
-		js_out.position.data[0] = curent_angle;
-		js_out.velocity.data[0] = pwm_tick_counter;
-		js_out.effort.data[0] = effort_to_go;
+		js_out.position.data[0] = kalman_angle;
+		js_out.velocity.data[0] = pwm_timer_period;
+		js_out.effort.data[0] = pwm_pulse_period;
 
-		rcl_ret_t ret = rcl_publish(&publisher, &js_out, NULL);
-	    if (ret != RCL_RET_OK)
+		rcl_ret_t ros_ret = rcl_publish(&publisher, &js_out, NULL);
+	    if (ros_ret != RCL_RET_OK)
 	    {
 	      printf("Error publishing (line %d)\n", __LINE__);
 	    }
@@ -310,45 +349,73 @@ void StartDefaultTask(void *argument)
   /* USER CODE END StartDefaultTask */
 }
 
-/* USER CODE BEGIN Header_I2CTask02 */
+/* USER CODE BEGIN Header_I2CTask01 */
 /**
 * @brief Function implementing the I2CTask thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_I2CTask02 */
-void I2CTask02(void *argument)
+/* USER CODE END Header_I2CTask01 */
+void I2CTask01(void *argument)
 {
-  /* USER CODE BEGIN I2CTask02 */
-	  HAL_StatusTypeDef ret;
-	  uint8_t buf[12];	// temporaty buffer for i2c message transmition
-	  uint8_t buf_recv[12];	// temporaty buffer for i2c message reception
-  /* Infinite loop */
+  /* USER CODE BEGIN I2CTask01 */
+	//run once at start
+	  init_angle = get_encoder_angle();
+	  prev_kalman_angle = init_angle;
+
+/* Infinite loop */
 	  for(;;)
 	  {
-			buf[0] = 0x0E;
-			ret = HAL_I2C_Master_Transmit(&hi2c1, (0b0110110 << 1) , buf, 1, HAL_MAX_DELAY);
-			if(ret == HAL_OK ){
-			}
-			ret = HAL_I2C_Master_Receive(&hi2c1, 0b0110110 << 1, buf_recv, 2, HAL_MAX_DELAY);
-			if(ret == HAL_OK ){
-			}
-			curent_angle = (2 * M_PI * (buf_recv[1] + 256 * buf_recv[0]) / 4096);
-		vTaskDelay(10);
+		kalman_angle = get_kalman_angle();
+		vTaskDelay(1);
 	  }
-  /* USER CODE END I2CTask02 */
+  /* USER CODE END I2CTask01 */
 }
 
-/* USER CODE BEGIN Header_MotorControllerTask03 */
+/* USER CODE BEGIN Header_MotorController01 */
 /**
 * @brief Function implementing the MotorController thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_MotorControllerTask03 */
-void MotorControllerTask03(void *argument)
+/* USER CODE END Header_MotorController01 */
+void MotorController01(void *argument)
 {
-  /* USER CODE BEGIN MotorControllerTask03 */
+  /* USER CODE BEGIN MotorController01 */
+	float Kp = 1.0;
+  /* Infinite loop */
+  for(;;)
+  {
+	  switch(state_of_controller)
+		{
+	  	  case(Stop):
+	  			  TIM3->CCR1 = 0;
+	  			  break;
+	  	  case(Go):
+				pwm_timer_period = 250; //(long)(MAX_PWM_TIMER_PERIOD * (1 - (angle_to_go - kalman_angle)/pi_2) + MIN_PWM_TIMER_PERIOD);
+	  	  	  	pwm_pulse_period = 125; //(long)(pwm_timer_period / 2) + 1;
+	  			break;
+	  	  case(Idle):
+	  			  break;
+	  	  case(Preempt):
+	  			  break;
+		}
+
+    osDelay(10);
+  }
+  /* USER CODE END MotorController01 */
+}
+
+/* USER CODE BEGIN Header_Soft_WD_Task04 */
+/**
+* @brief Function implementing the Soft_WD_Task thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_Soft_WD_Task04 */
+void Soft_WD_Task04(void *argument)
+{
+  /* USER CODE BEGIN Soft_WD_Task04 */
   /* Infinite loop */
   for(;;)
   {
@@ -357,26 +424,76 @@ void MotorControllerTask03(void *argument)
 		 NVIC_SystemReset();
 	 }
     vTaskDelay(500);
+
   }
-  /* USER CODE END MotorControllerTask03 */
+  /* USER CODE END Soft_WD_Task04 */
 }
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
-double kalman_angle()  //TODO KALMAN
-{
-	return 2.0;
-}
-
-
-void int_cb(const void * msgin)
+void motor_controller_cb(const void * msgin)
 {
 // Cast received message to used type
 const sensor_msgs__msg__JointState * js_in = (const sensor_msgs__msg__JointState *)msgin;
 angle_to_go = js_in->position.data[0];
 velocity_to_go = js_in->velocity.data[0];
 effort_to_go = js_in->effort.data[0];
+if (effort_to_go == 0)
+{
+	state_of_controller = Idle;
+}
+else if(velocity_to_go == 0)
+{
+	state_of_controller = Stop;
+}
+else
+{
+	ticks_to_go = ticks_from_angle(angle_to_go - get_kalman_angle()) + pwm_tick_counter;
+	state_of_controller = Go;
+}
+
+}
+
+double get_encoder_angle()
+{
+	//get encoder angle
+	buf[0] = 0x0E;
+	i2c_ret = HAL_I2C_Master_Transmit(&hi2c1, (0b0110110 << 1) , buf, 1, HAL_MAX_DELAY);
+	if(i2c_ret == HAL_OK ){
+	}
+	i2c_ret = HAL_I2C_Master_Receive(&hi2c1, 0b0110110 << 1, buf_recv, 2, HAL_MAX_DELAY);
+	if(i2c_ret == HAL_OK ){
+	}
+	return (2 * M_PI * (buf_recv[1] + 256 * buf_recv[0]) / 4096);
+}
+
+double get_kalman_angle()
+{
+	//Kalman like filtering
+	if (TIM3->CCR1 != 0)
+	{
+		ticks_c = 0.9;
+		encoder_c = 0.1;
+	}
+	else
+	{
+		ticks_c = 0.1;
+		encoder_c = 0.9;
+	}
+	encoder_angle = get_encoder_angle();
+	curent_kalman_angle = prev_kalman_angle + (angle_from_ticks(pwm_tick_counter) - prev_kalman_angle + init_angle) * ticks_c + (encoder_angle - prev_kalman_angle) * encoder_c;
+	prev_kalman_angle = curent_kalman_angle;
+	return curent_kalman_angle;
+}
+
+uint32_t ticks_from_angle(double angle)
+{
+	return ((angle * ticks_per_round)/ (pi_2));
+}
+
+double angle_from_ticks(uint32_t ticks)
+{
+	return (pi_2 * ticks / ticks_per_round);
 }
 
 /* USER CODE END Application */
-

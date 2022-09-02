@@ -22,12 +22,19 @@
 
 /* USER CODE BEGIN 0 */
 long pwm_tick_counter = 0;
+extern long ticks_to_go;
+
+extern long pwm_timer_period;
+extern long pwm_pulse_period;
+
+
 extern double angle_by_ticks;
 extern double angle_to_go;
 extern double init_angle;
 extern double kalman_angle;
 
-double koeff = 2 * M_PI / TICKS_PER_CYCLE;
+extern enum State_of_motor { Stop, Go, Idle, Preempt };
+extern enum State_of_motor state_of_controller;
 
 /* USER CODE END 0 */
 
@@ -50,7 +57,7 @@ void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 1;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 250;
+  htim3.Init.Period = MIN_PWM_TIMER_PERIOD;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
@@ -64,7 +71,7 @@ void MX_TIM3_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 125;
+  sConfigOC.Pulse = (int)((MIN_PWM_TIMER_PERIOD + 1)/2);
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
@@ -151,11 +158,12 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
 	  if(htim->Instance == TIM3)
 	  {
-		  if (kalman_angle < angle_to_go)
+		  if (pwm_tick_counter < ticks_to_go && state_of_controller != Stop)
 		  {
-			  TIM3->CCR1 = 160;
+				TIM3->ARR = pwm_timer_period;
+				TIM3->CCR1 = pwm_pulse_period;
 		  }
-		  else
+		  else   
 		  {
 			  TIM3->CCR1 = 0;
 		  }
@@ -163,10 +171,7 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 		  {
 			  pwm_tick_counter = pwm_tick_counter - 2*((GPIOC->ODR & GPIO_PIN_7)>>7) + 1;
 		  }
-		  angle_by_ticks = init_angle + pwm_tick_counter * koeff;
 	  }
 }
-
-
 
 /* USER CODE END 1 */

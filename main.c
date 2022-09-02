@@ -20,14 +20,24 @@
 #include "main.h"
 #include "cmsis_os.h"
 #include "can.h"
+#include "dma.h"
 #include "i2c.h"
 #include "iwdg.h"
 #include "spi.h"
 #include "tim.h"
+#include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+
+#include <rcl/rcl.h>
+#include <rcl/error_handling.h>
+#include <rclc/rclc.h>
+#include <rclc/executor.h>
+#include <uxr/client/transport.h>
+#include <rmw_microxrcedds_c/config.h>
+#include <rmw_microros/rmw_microros.h>
 
 
 /* USER CODE END Includes */
@@ -44,38 +54,36 @@
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 
-extern CAN_HandleTypeDef hcan1;
-extern TIM_HandleTypeDef htim3;
-
-uint8_t TxData[8];					// Data to be sent via CAN
-uint32_t TxMailbox;					// CAN temporary mailbox. Required by HAL function
-CAN_TxHeaderTypeDef TxHeader;		// Header for can message
-CAN_FilterTypeDef canfilterconfig;	// Filter for receiving CAN messages
-uint8_t RxData[8];					// data received from can bus
-CAN_RxHeaderTypeDef   RxHeader;		// header received by can bus
-
-int CAN_Header_Config(CAN_TxHeaderTypeDef* TxHeader);	// Configures CAN message header.
-int CAN_Filter_Config(CAN_FilterTypeDef* canfilterconfig);	// COnfigures filter for CAN message reception
-int CAN_Starter(CAN_HandleTypeDef* hcan,CAN_FilterTypeDef* canfilterconfig);	//Starts CAN transmitions and receptions
-
-void CTRL_Reg_Set();
-void TORQUE_Reg_Set();
-void STATUS_Reg_Set();
-uint16_t RegAccess(uint8_t operation, uint8_t address, uint16_t value); // Sends or receives SPI message
-
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-int8_t stepper_step_denominator = 8;
-long pwm_tick_counter = 0;
+// CAN Variables
+uint8_t TxData[8];					// Data to be sent via CAN
+uint64_t TxMailbox;					// CAN temporary mailbox. Required by HAL function
+CAN_TxHeaderTypeDef TxHeader;		// Header for can message
+CAN_FilterTypeDef canfilterconfig;	// Filter for receiving CAN messages
+uint8_t RxData[8];					// data received from can bus
+CAN_RxHeaderTypeDef   RxHeader;		// header received by can bus
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
+int CAN_Header_Config(CAN_TxHeaderTypeDef* TxHeader);	// Configures CAN message header.
+int CAN_Filter_Config(CAN_FilterTypeDef* canfilterconfig);	// COnfigures filter for CAN message reception
+int CAN_Starter(CAN_HandleTypeDef* hcan,CAN_FilterTypeDef* canfilterconfig);	//Starts CAN transmittions and receptions
+
+//SPI Functions
+
+void CTRL_Reg_Set();
+void TORQUE_Reg_Set();
+void STATUS_Reg_Set();
+uint16_t RegAccess(uint8_t operation, uint8_t address, uint16_t value); // Sends or receives SPI message
+
+uint8_t stepper_step_denominator = 8;
 
 /* USER CODE END PFP */
 
@@ -112,10 +120,12 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_CAN1_Init();
   MX_I2C1_Init();
   MX_SPI1_Init();
   MX_TIM3_Init();
+  MX_USART1_UART_Init();
   MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
 
@@ -127,12 +137,15 @@ int main(void)
 	HAL_Delay(1);
 	CTRL_Reg_Set();
 
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
 
-  //CAN START TODO should move it to dma_transport.c in init func
+
+  //initialize CAN
   CAN_Header_Config(&TxHeader);		// Sets header values
   CAN_Filter_Config(&canfilterconfig);// Seds filter values
   CAN_Starter(&hcan1, &canfilterconfig); // starts can
+
+  //PWM TEST
 
   HAL_TIM_PWM_Start_IT(&htim3, TIM_CHANNEL_1);
 
@@ -205,6 +218,7 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
 int CAN_Filter_Config(CAN_FilterTypeDef* canfilterconfig){
 	canfilterconfig->FilterActivation = CAN_FILTER_ENABLE;
 	canfilterconfig->FilterBank = 0;  // which filter bank to use from the assigned ones
@@ -234,18 +248,17 @@ int CAN_Starter(CAN_HandleTypeDef* hcan,CAN_FilterTypeDef* canfilterconfig){
 		if (HAL_CAN_Start(hcan) != HAL_OK){		// attempting to start CAN
 			Error_Handler();
 		}
-		if (HAL_CAN_ActivateNotification(hcan, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK){	// attempting to enable CAN interrupts.
+		if (HAL_CAN_ActivateNotification(hcan, CAN_IT_RX_FIFO0_MSG_PENDING | CAN_IT_TX_MAILBOX_EMPTY) != HAL_OK){	// attempting to enable CAN interrupts.
 			Error_Handler();								// CAN1_RX0_IRQHandler() is called when an interrupt is triggered
 		}
 	return 1;
 }
 
-
 void CTRL_Reg_Set(){
 	uint16_t TX = 0x0000;
 	TX += (0x03 << 10); // 850 ns dead time
 	TX += (0x03 << 8); // Gain of 40
-	TX += (stepper_step_denominator << 3); // 1/2^8 = 1/256 step
+	TX += (stepper_step_denominator << 3); // 1/4 stepn
 	TX += 0x01 ; // Enable motor
 	RegAccess(WRITE, 0x00, TX); // write CTRL Register (Address = 0x00)
 	return;
@@ -305,8 +318,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
-
-
 
   /* USER CODE END Callback 1 */
 }
