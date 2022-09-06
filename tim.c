@@ -27,13 +27,16 @@ extern long ticks_to_go;
 extern long pwm_timer_period;
 extern long pwm_pulse_period;
 
+extern long lower_angle_limits_in_ticks;
+extern long upper_angle_limits_in_ticks;
+
 
 extern double angle_by_ticks;
 extern double angle_to_go;
 extern double init_angle;
 extern double kalman_angle;
 
-extern enum State_of_motor { Stop, Go, Idle, Preempt };
+extern enum State_of_motor { Stop, Go, Idle, Effort };
 extern enum State_of_motor state_of_controller;
 
 /* USER CODE END 0 */
@@ -158,14 +161,23 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
 	  if(htim->Instance == TIM3)
 	  {
-		  if (pwm_tick_counter < ticks_to_go && state_of_controller != Stop)
+		  if (state_of_controller == Go)
 		  {
 				TIM3->ARR = pwm_timer_period;
 				TIM3->CCR1 = pwm_pulse_period;
 		  }
-		  else   
+		  else
 		  {
 			  TIM3->CCR1 = 0;
+		  }
+		  if (pwm_tick_counter < lower_angle_limits_in_ticks || pwm_tick_counter > upper_angle_limits_in_ticks)
+		  {
+			  TIM3->CCR1 = 0;
+		  }
+		  if (abs(pwm_tick_counter - ticks_to_go) < EPSILON)
+		  {
+			  HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_2);
+			  state_of_controller = Stop;
 		  }
 		  if (TIM3->CCR1 != 0)
 		  {
@@ -173,5 +185,7 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 		  }
 	  }
 }
+
+
 
 /* USER CODE END 1 */

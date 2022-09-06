@@ -74,19 +74,22 @@ long pwm_timer_period = 249;
 long pwm_pulse_period = 124;
 
 
-double angle_to_go = 0;
-double velocity_to_go = 0;
-double effort_to_go = 0;
+double angle_to_go = 0.0;
+double velocity_to_go = 0.0;
+double effort_to_go = 0.0;
+double prev_effort = 0.0;
 double kalman_angle;
 
 double prev_kalman_angle = 0;
 double curent_kalman_angle = 0;
 
+double target_angle_delta = 0;
+
 double encoder_angle;
-double angle_by_ticks = 0;
-double init_angle = 0;
-double curent_velocity = 0; //TODO Kalman vel
-double curent_effort = 0;
+double angle_by_ticks = 0.0;
+double init_angle = 0.0;
+double curent_velocity = 0.0; //TODO Kalman vel
+double curent_effort = 0.0;
 
 
 //Kalman's coef
@@ -94,6 +97,9 @@ float ticks_c, encoder_c;
 
 //Ticks coef
 double ticks_per_round = STEPPER_STEP_DEN * TICKS_PER_CYCLE * GEAR_RATIO;
+
+long lower_angle_limits_in_ticks = 0;
+long upper_angle_limits_in_ticks = 0;
 
 double pi_2 = 2 * M_PI;
 
@@ -110,7 +116,7 @@ extern CAN_RxHeaderTypeDef   RxHeader;		// header received by can bus
 extern CAN_HandleTypeDef hcan1;
 extern I2C_HandleTypeDef hi2c1;
 
-enum State_of_motor { Stop, Go, Idle, Preempt };
+enum State_of_motor { Stop, Go, Idle, Effort };
 
 enum State_of_motor state_of_controller;
 
@@ -165,8 +171,9 @@ void * microros_zero_allocate(size_t number_of_elements, size_t size_of_element,
 void motor_controller_cb(const void *);
 double get_kalman_angle();
 double get_encoder_angle();
-uint32_t ticks_from_angle(double angle);
-double angle_from_ticks(uint32_t ticks);
+long ticks_from_angle(double angle);
+double angle_from_ticks(long ticks);
+extern void TORQUE_Reg_Set(int torque);
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void *argument);
@@ -332,8 +339,8 @@ void StartDefaultTask(void *argument)
 	  {
 
 		js_out.position.data[0] = kalman_angle;
-		js_out.velocity.data[0] = pwm_timer_period;
-		js_out.effort.data[0] = pwm_pulse_period;
+		js_out.velocity.data[0] = encoder_angle;
+		js_out.effort.data[0] = effort_to_go;
 
 		rcl_ret_t ros_ret = rcl_publish(&publisher, &js_out, NULL);
 	    if (ros_ret != RCL_RET_OK)
@@ -362,6 +369,9 @@ void I2CTask01(void *argument)
 	//run once at start
 	  init_angle = get_encoder_angle();
 	  prev_kalman_angle = init_angle;
+	  lower_angle_limits_in_ticks = - ticks_from_angle(init_angle + LOWER_ANGLE_LIMIT);
+	  upper_angle_limits_in_ticks = ticks_from_angle(UPPER_ANGLE_LIMIT - init_angle);
+
 
 /* Infinite loop */
 	  for(;;)
@@ -383,6 +393,7 @@ void MotorController01(void *argument)
 {
   /* USER CODE BEGIN MotorController01 */
 	float Kp = 1.0;
+
   /* Infinite loop */
   for(;;)
   {
@@ -391,14 +402,35 @@ void MotorController01(void *argument)
 	  	  case(Stop):
 	  			  TIM3->CCR1 = 0;
 	  			  break;
-	  	  case(Go):
-				pwm_timer_period = 250; //(long)(MAX_PWM_TIMER_PERIOD * (1 - (angle_to_go - kalman_angle)/pi_2) + MIN_PWM_TIMER_PERIOD);
-	  	  	  	pwm_pulse_period = 125; //(long)(pwm_timer_period / 2) + 1;
-	  			break;
+	  	  case(Effort):
+				  TORQUE_Reg_Set((int)(effort_to_go));
+	  	  	  	  state_of_controller = Go;
+	  			  break;
 	  	  case(Idle):
 	  			  break;
-	  	  case(Preempt):
-	  			  break;
+	  	  case(Go):
+				target_angle_delta = angle_to_go - kalman_angle;
+			  	  if (target_angle_delta > 0)
+			  	  {
+			  		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
+			  	  }
+			  	  else
+			  	  {
+			  		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
+			  	  }
+						ticks_to_go = ticks_from_angle(target_angle_delta) + pwm_tick_counter;
+			  	  	  	if(fabs(target_angle_delta) < PD_ANGLE_THRESHOLD)
+			  	  	  	{
+						pwm_timer_period = (long)((MAX_PWM_TIMER_PERIOD - MIN_PWM_TIMER_PERIOD) * fabs(target_angle_delta) + MIN_PWM_TIMER_PERIOD); //TODO Kp add and some minor tests
+			  	  	  	pwm_pulse_period = (long)(pwm_timer_period / 2) + 1;
+			  	  	  	}
+			  	  	  	else
+			  	  	  	{
+			  	  	  	pwm_timer_period = 250;
+			  	  	    pwm_pulse_period = 125;
+			  	  	  	}
+	  	  	  	//state_of_controller = Go;
+	  	  	  	break;
 		}
 
     osDelay(10);
@@ -423,7 +455,11 @@ void Soft_WD_Task04(void *argument)
 	 {
 		 NVIC_SystemReset();
 	 }
-    vTaskDelay(500);
+	 if (fabs(encoder_angle - kalman_angle) > ENCODER_TO_KALMAN_DEVIATION)
+	 {
+		 NVIC_SystemReset();
+	 }
+    vTaskDelay(300);
 
   }
   /* USER CODE END Soft_WD_Task04 */
@@ -438,7 +474,12 @@ const sensor_msgs__msg__JointState * js_in = (const sensor_msgs__msg__JointState
 angle_to_go = js_in->position.data[0];
 velocity_to_go = js_in->velocity.data[0];
 effort_to_go = js_in->effort.data[0];
-if (effort_to_go == 0)
+if (prev_effort != effort_to_go)
+{
+	state_of_controller = Effort;
+	prev_effort = effort_to_go;
+}
+else if (effort_to_go == 0)
 {
 	state_of_controller = Idle;
 }
@@ -448,10 +489,28 @@ else if(velocity_to_go == 0)
 }
 else
 {
-	ticks_to_go = ticks_from_angle(angle_to_go - get_kalman_angle()) + pwm_tick_counter;
+	target_angle_delta = angle_to_go - kalman_angle;
+	  if (target_angle_delta > 0)
+	  {
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
+	  }
+	  else
+	  {
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
+	  }
+		ticks_to_go = ticks_from_angle(target_angle_delta) + pwm_tick_counter;
+	  	  	if(fabs(target_angle_delta) < PD_ANGLE_THRESHOLD)
+	  	  	{
+	  	  		pwm_timer_period = (long)((MAX_PWM_TIMER_PERIOD - MIN_PWM_TIMER_PERIOD) * fabs(target_angle_delta) + MIN_PWM_TIMER_PERIOD); //TODO Kp add and some minor tests
+	  	  		pwm_pulse_period = (long)(pwm_timer_period / 2) + 1;
+	  	  	}
+	  	  	else
+	  	  	{
+	  	  		pwm_timer_period = 250;
+	  	  		pwm_pulse_period = 125;
+	  	  	}
 	state_of_controller = Go;
 }
-
 }
 
 double get_encoder_angle()
@@ -486,14 +545,19 @@ double get_kalman_angle()
 	return curent_kalman_angle;
 }
 
-uint32_t ticks_from_angle(double angle)
+long ticks_from_angle(double angle)
 {
 	return ((angle * ticks_per_round)/ (pi_2));
 }
 
-double angle_from_ticks(uint32_t ticks)
+double angle_from_ticks(long ticks)
 {
 	return (pi_2 * ticks / ticks_per_round);
+}
+
+double clamp_value(double value, double min_value, double max_value)
+{
+	return (((min_value < value)? value : min_value) > max_value)? max_value: value;
 }
 
 /* USER CODE END Application */

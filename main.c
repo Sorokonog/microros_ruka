@@ -79,7 +79,7 @@ int CAN_Starter(CAN_HandleTypeDef* hcan,CAN_FilterTypeDef* canfilterconfig);	//S
 //SPI Functions
 
 void CTRL_Reg_Set();
-void TORQUE_Reg_Set();
+void TORQUE_Reg_Set(int torque);
 void STATUS_Reg_Set();
 uint16_t RegAccess(uint8_t operation, uint8_t address, uint16_t value); // Sends or receives SPI message
 
@@ -133,22 +133,19 @@ int main(void)
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_SET);
 
 	HAL_Delay(1);
-	TORQUE_Reg_Set();
+	TORQUE_Reg_Set(0);
 	HAL_Delay(1);
 	CTRL_Reg_Set();
 
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
-
-
   //initialize CAN
   CAN_Header_Config(&TxHeader);		// Sets header values
-  CAN_Filter_Config(&canfilterconfig);// Seds filter values
+  CAN_Filter_Config(&canfilterconfig);// Sets filter values
   CAN_Starter(&hcan1, &canfilterconfig); // starts can
-
+  HAL_Delay(1);
   //PWM TEST
 
   HAL_TIM_PWM_Start_IT(&htim3, TIM_CHANNEL_1);
-
+  HAL_Delay(1);
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -258,17 +255,16 @@ void CTRL_Reg_Set(){
 	uint16_t TX = 0x0000;
 	TX += (0x03 << 10); // 850 ns dead time
 	TX += (0x03 << 8); // Gain of 40
-	TX += (stepper_step_denominator << 3); // 1/4 stepn
+	TX += (stepper_step_denominator << 3);
 	TX += 0x01 ; // Enable motor
 	RegAccess(WRITE, 0x00, TX); // write CTRL Register (Address = 0x00)
 	return;
 }
 
-void TORQUE_Reg_Set(){
+void TORQUE_Reg_Set(int torque){
 	uint16_t TX = 0x0000;
 	TX += (0x01 << 8); // sample time = 100 us
-	TX += 0x00; // Torque = 0x3F
-//	TX = 0b0001000100000001;
+	TX += torque; // Torque to set
 	RegAccess(WRITE, 0x01, TX); // write TORQUE Register (Address = 0x01)
 	return;
 }
