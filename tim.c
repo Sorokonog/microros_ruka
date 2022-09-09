@@ -60,7 +60,7 @@ void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 1;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = MIN_PWM_TIMER_PERIOD;
+  htim3.Init.Period = IDLE_PWM_TIMER_PERIOD;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
@@ -74,7 +74,7 @@ void MX_TIM3_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = (int)((MIN_PWM_TIMER_PERIOD + 1)/2);
+  sConfigOC.Pulse = (int)((IDLE_PWM_TIMER_PERIOD + 1)/2);
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
@@ -168,15 +168,16 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 		  }
 		  else
 		  {
+			  TIM3->ARR = IDLE_PWM_TIMER_PERIOD;
 			  TIM3->CCR1 = 0;
 		  }
 		  if (pwm_tick_counter < lower_angle_limits_in_ticks || pwm_tick_counter > upper_angle_limits_in_ticks)
 		  {
+			  TIM3->ARR = IDLE_PWM_TIMER_PERIOD;
 			  TIM3->CCR1 = 0;
 		  }
 		  if (abs(pwm_tick_counter - ticks_to_go) < EPSILON)
 		  {
-			  HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_2);
 			  state_of_controller = Stop;
 		  }
 		  if (TIM3->CCR1 != 0)

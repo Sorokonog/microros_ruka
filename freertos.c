@@ -70,26 +70,27 @@ sensor_msgs__msg__JointState js_in, js_out;
 
 extern long pwm_tick_counter;
 long ticks_to_go = 0;
-long pwm_timer_period = 249;
-long pwm_pulse_period = 124;
+long pwm_timer_period = IDLE_PWM_TIMER_PERIOD;
+long pwm_pulse_period = 0;
 
 
 double angle_to_go = 0.0;
 double velocity_to_go = 0.0;
 double effort_to_go = 0.0;
 double prev_effort = 0.0;
+
 double kalman_angle;
 
 double prev_kalman_angle = 0;
 double curent_kalman_angle = 0;
 
 double target_angle_delta = 0;
+double init_angle_target = 0;
 
 double encoder_angle;
 double angle_by_ticks = 0.0;
 double init_angle = 0.0;
 double curent_velocity = 0.0; //TODO Kalman vel
-double curent_effort = 0.0;
 
 
 //Kalman's coef
@@ -101,7 +102,17 @@ double ticks_per_round = STEPPER_STEP_DEN * TICKS_PER_CYCLE * GEAR_RATIO;
 long lower_angle_limits_in_ticks = 0;
 long upper_angle_limits_in_ticks = 0;
 
+
 double pi_2 = 2 * M_PI;
+
+//Vel defines
+double real_velocity_to_go = 0;
+long lower_velocity_limits_in_radians = 0;
+double upper_velocity_limits_in_radians = 0;
+double k_of_linear_part_of_traj_pwm_timer_period = 0;
+
+long linear_part_of_traj_pwm_timer_period = 0;
+
 
 uint32_t read_fault = 0; //read fault WD
 
@@ -173,7 +184,13 @@ double get_kalman_angle();
 double get_encoder_angle();
 long ticks_from_angle(double angle);
 double angle_from_ticks(long ticks);
+double clamp_value(double value, double min_value, double max_value);
+
+
 extern void TORQUE_Reg_Set(int torque);
+
+
+
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void *argument);
@@ -339,8 +356,8 @@ void StartDefaultTask(void *argument)
 	  {
 
 		js_out.position.data[0] = kalman_angle;
-		js_out.velocity.data[0] = encoder_angle;
-		js_out.effort.data[0] = effort_to_go;
+		js_out.velocity.data[0] = real_velocity_to_go;
+		js_out.effort.data[0] = prev_effort;
 
 		rcl_ret_t ros_ret = rcl_publish(&publisher, &js_out, NULL);
 	    if (ros_ret != RCL_RET_OK)
@@ -392,7 +409,8 @@ void I2CTask01(void *argument)
 void MotorController01(void *argument)
 {
   /* USER CODE BEGIN MotorController01 */
-	float Kp = 1.0;
+	upper_velocity_limits_in_radians = pi_2 / (STEPPER_STEP_DEN * TICKS_PER_CYCLE * GEAR_RATIO / APB1_TIMER_CLOCK_FREQUENCY * MIN_PWM_TIMER_PERIOD);
+	k_of_linear_part_of_traj_pwm_timer_period = MIN_PWM_TIMER_PERIOD * upper_velocity_limits_in_radians;
 
   /* Infinite loop */
   for(;;)
@@ -401,6 +419,8 @@ void MotorController01(void *argument)
 		{
 	  	  case(Stop):
 	  			  TIM3->CCR1 = 0;
+	  	  	  	  TIM3->ARR = IDLE_PWM_TIMER_PERIOD;
+	  	  	  	  real_velocity_to_go = 0;
 	  			  break;
 	  	  case(Effort):
 				  TORQUE_Reg_Set((int)(effort_to_go));
@@ -409,7 +429,7 @@ void MotorController01(void *argument)
 	  	  case(Idle):
 	  			  break;
 	  	  case(Go):
-				target_angle_delta = angle_to_go - kalman_angle;
+					target_angle_delta = angle_to_go - kalman_angle;
 			  	  if (target_angle_delta > 0)
 			  	  {
 			  		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
@@ -421,15 +441,21 @@ void MotorController01(void *argument)
 						ticks_to_go = ticks_from_angle(target_angle_delta) + pwm_tick_counter;
 			  	  	  	if(fabs(target_angle_delta) < PD_ANGLE_THRESHOLD)
 			  	  	  	{
-						pwm_timer_period = (long)((MAX_PWM_TIMER_PERIOD - MIN_PWM_TIMER_PERIOD) * fabs(target_angle_delta) + MIN_PWM_TIMER_PERIOD); //TODO Kp add and some minor tests
-			  	  	  	pwm_pulse_period = (long)(pwm_timer_period / 2) + 1;
+						pwm_timer_period = (long)((MAX_PWM_TIMER_PERIOD - linear_part_of_traj_pwm_timer_period) * fabs(target_angle_delta) + linear_part_of_traj_pwm_timer_period); //TODO Kp add and some minor tests
+			  	  	  	pwm_pulse_period = (long)(pwm_timer_period / 2);
+			  	  	  	}
+			  	  	  	else if(fabs(init_angle_target - kalman_angle) < PD_ANGLE_THRESHOLD)
+			  	  	  	{
+						pwm_timer_period = (long)(MAX_PWM_TIMER_PERIOD - (MAX_PWM_TIMER_PERIOD - linear_part_of_traj_pwm_timer_period) * fabs(init_angle_target - kalman_angle)*1/PD_ANGLE_THRESHOLD); //TODO Kp add and some minor tests
+				  	  	pwm_pulse_period = (long)(pwm_timer_period / 2);
 			  	  	  	}
 			  	  	  	else
 			  	  	  	{
-			  	  	  	pwm_timer_period = 250;
-			  	  	    pwm_pulse_period = 125;
+			  	  	  		//TODO velocity
+			  	  	  	pwm_timer_period = linear_part_of_traj_pwm_timer_period;
+			  	  	  	pwm_pulse_period = (long)(pwm_timer_period / 2);
 			  	  	  	}
-	  	  	  	//state_of_controller = Go;
+	  	  	  	state_of_controller = Go;
 	  	  	  	break;
 		}
 
@@ -474,12 +500,7 @@ const sensor_msgs__msg__JointState * js_in = (const sensor_msgs__msg__JointState
 angle_to_go = js_in->position.data[0];
 velocity_to_go = js_in->velocity.data[0];
 effort_to_go = js_in->effort.data[0];
-if (prev_effort != effort_to_go)
-{
-	state_of_controller = Effort;
-	prev_effort = effort_to_go;
-}
-else if (effort_to_go == 0)
+if (effort_to_go == 0)
 {
 	state_of_controller = Idle;
 }
@@ -487,28 +508,20 @@ else if(velocity_to_go == 0)
 {
 	state_of_controller = Stop;
 }
+else if(effort_to_go != prev_effort)
+{
+	TORQUE_Reg_Set((int)(effort_to_go));
+	init_angle_target = kalman_angle;
+    real_velocity_to_go = clamp_value(velocity_to_go, lower_velocity_limits_in_radians, upper_velocity_limits_in_radians);
+	linear_part_of_traj_pwm_timer_period = (long)(k_of_linear_part_of_traj_pwm_timer_period / real_velocity_to_go);
+	state_of_controller = Go;
+	prev_effort = effort_to_go;
+}
 else
 {
-	target_angle_delta = angle_to_go - kalman_angle;
-	  if (target_angle_delta > 0)
-	  {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
-	  }
-	  else
-	  {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
-	  }
-		ticks_to_go = ticks_from_angle(target_angle_delta) + pwm_tick_counter;
-	  	  	if(fabs(target_angle_delta) < PD_ANGLE_THRESHOLD)
-	  	  	{
-	  	  		pwm_timer_period = (long)((MAX_PWM_TIMER_PERIOD - MIN_PWM_TIMER_PERIOD) * fabs(target_angle_delta) + MIN_PWM_TIMER_PERIOD); //TODO Kp add and some minor tests
-	  	  		pwm_pulse_period = (long)(pwm_timer_period / 2) + 1;
-	  	  	}
-	  	  	else
-	  	  	{
-	  	  		pwm_timer_period = 250;
-	  	  		pwm_pulse_period = 125;
-	  	  	}
+	init_angle_target = kalman_angle;
+    real_velocity_to_go = clamp_value(velocity_to_go, lower_velocity_limits_in_radians, upper_velocity_limits_in_radians);
+	linear_part_of_traj_pwm_timer_period = (long)(k_of_linear_part_of_traj_pwm_timer_period / real_velocity_to_go);
 	state_of_controller = Go;
 }
 }

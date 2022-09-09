@@ -218,7 +218,7 @@ int main(int argc, char** argv)
         /**
          * Set verbosity level
          */
-        custom_agent.set_verbose_level(6);
+        custom_agent.set_verbose_level(0);
 
         /**
          * Run agent and wait until receiving an stop signal.

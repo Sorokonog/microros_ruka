@@ -66,9 +66,10 @@ void Error_Handler(void);
 #define STEPPER_PWM_PRESCALER (0)		// clock speed (80000000) divided by (this + 1) = pwm timer speed
 #define STEPPER_STEP_DEN (256)
 #define GEAR_RATIO (50.0)
-#define APB1_TIMER_CLOCK_FREQUENCY (80000000.0)// frequency of the APB1 clock
+#define APB1_TIMER_CLOCK_FREQUENCY (80000000)// frequency of the APB1 clock
 #define MIN_PWM_TIMER_PERIOD (250)
 #define MAX_PWM_TIMER_PERIOD (2000)
+#define IDLE_PWM_TIMER_PERIOD (50000)
 #define PD_ANGLE_THRESHOLD (0.05)
 #define EPSILON (1) //number in ticks to consider goal reached
 #define ENCODER_TO_KALMAN_DEVIATION (0.1) // max angle of deviation to consider something goes wrong and reset the system
@@ -78,8 +79,8 @@ void Error_Handler(void);
 #define LOWER_ANGLE_LIMIT (0)
 
 //effort limits
-#define UPPER_EFFORT_LIMIT (255) //hard effort limits (heating purpose)
-#define LOWER_EFFORT_LIMIT (0)
+#define UPPER_EFFORT_LIMIT (255.0) //hard effort limits (heating purpose)
+#define LOWER_EFFORT_LIMIT (0.0)
 
 //velocity limits
 #define UPPER_VEL_LIMIT (6.28) //hard vel limits (timing purpose)
