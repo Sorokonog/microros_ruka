@@ -45,7 +45,6 @@ int main(int argc, char** argv)
      */
     eprosima::uxr::CustomAgent::InitFunction init_function = [&]() -> bool
     {
-        //struct sockaddr_can addr;
         struct canfd_frame frame;
         struct can_frame rec_frame;
 
@@ -137,8 +136,10 @@ int main(int argc, char** argv)
                 {
                     read(poll_fd.fd,&frame,sizeof(struct can_frame));
                     memcpy(buffer,&(frame.data),frame.can_dlc);
-                    source_endpoint->set_member_value<uint32_t>("ID",frame.can_id);
-                    transport_rc = eprosima::uxr::TransportRc::ok;
+                    source_endpoint->set_member_value<uint16_t>("ID",frame.can_id);
+                    transport_rc = (-1 != rv)
+                    ? eprosima::uxr::TransportRc::ok
+                    : eprosima::uxr::TransportRc::server_error;
                     return frame.can_dlc;
                  }
         }
@@ -160,7 +161,7 @@ int main(int argc, char** argv)
         int rv;
 
         ssize_t bytes_sent = 0;
-        frame.can_id = 12;
+        frame.can_id = destination_endpoint->get_member<uint16_t>("ID") + 10;
         frame.can_dlc = 8;
 
         uint16_t cycle, rest;
@@ -188,7 +189,9 @@ int main(int argc, char** argv)
                 bytes_sent += rest;
             }    
         }
-        transport_rc = eprosima::uxr::TransportRc::ok;
+        transport_rc = (-1 != rv)
+        ? eprosima::uxr::TransportRc::ok
+        : eprosima::uxr::TransportRc::server_error;
         return bytes_sent;
     };
 
@@ -201,7 +204,7 @@ int main(int argc, char** argv)
          * EndPoint definition for this transport. We define an address and a port.
          */
         eprosima::uxr::CustomEndPoint custom_endpoint;
-        custom_endpoint.add_member<uint32_t>("ID");
+        custom_endpoint.add_member<uint16_t>("ID");
         /**
          * Create a custom agent instance.
          */

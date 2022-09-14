@@ -60,8 +60,9 @@ void Error_Handler(void);
 
 /* Private defines -----------------------------------------------------------*/
 /* USER CODE BEGIN Private defines */
-#define MY_CAN_ID (15)					// CAN ID OF THIS DEVICE
-#define ROUTER_ID (12)					// CAN ID OF ROUTER DEVICE
+#define MY_CAN_ID (1)					// CAN ID OF THIS DEVICE
+#define ROUTER_ID (11)					// CAN ID OF ROUTER DEVICE
+#define CLIENT_KEY (0xCAFEBAB0)         //RMW Client key
 #define TICKS_PER_CYCLE (200)	// 200
 #define STEPPER_PWM_PRESCALER (0)		// clock speed (80000000) divided by (this + 1) = pwm timer speed
 #define STEPPER_STEP_DEN (256)

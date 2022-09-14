@@ -88,11 +88,12 @@ ret = HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, data);
 
 if (ret != HAL_OK)
 {
-	//HAL_GPIO_WritePin(GPIOD, GPIO_PIN_2, 1); //TODO ERROR HANDLER
+	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_2, 1); //TODO ERROR HANDLER
 }
 
 if (RxHeader.StdId == ROUTER_ID)
 	{
+		HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_2); //Just for fun
 		for(uint16_t i=0; i<RxHeader.DLC; i++)
 			{
 			if(can_tail == CAN_IT_BUFFER_SIZE)

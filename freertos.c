@@ -266,7 +266,7 @@ void StartDefaultTask(void *argument)
 	rclc_support_t support;
 	rcl_allocator_t allocator;
 	rcl_node_t node;
-
+	rcl_init_options_t init_options;
 
 	rmw_uros_set_custom_transport(
 			    true,
@@ -276,78 +276,90 @@ void StartDefaultTask(void *argument)
 			    cubemx_transport_write,
 			    cubemx_transport_read);
 
-			  rcl_allocator_t freeRTOS_allocator = rcutils_get_zero_initialized_allocator();
-			  freeRTOS_allocator.allocate = microros_allocate;
-			  freeRTOS_allocator.deallocate = microros_deallocate;
-			  freeRTOS_allocator.reallocate = microros_reallocate;
-			  freeRTOS_allocator.zero_allocate =  microros_zero_allocate;
+	rcl_allocator_t freeRTOS_allocator = rcutils_get_zero_initialized_allocator();
+	freeRTOS_allocator.allocate = microros_allocate;
+	freeRTOS_allocator.deallocate = microros_deallocate;
+	freeRTOS_allocator.reallocate = microros_reallocate;
+	freeRTOS_allocator.zero_allocate =  microros_zero_allocate;
 
-			  if (!rcutils_set_default_allocator(&freeRTOS_allocator)) {
-			      printf("Error on default allocators (line %d)\n", __LINE__);
-			  }
+	//create init_options
+	allocator = rcl_get_default_allocator();
+	init_options = rcl_get_zero_initialized_init_options();
+	rcl_init_options_init(&init_options, allocator);
 
-			  allocator = rcl_get_default_allocator();
+	rmw_init_options_t* rmw_options = rcl_init_options_get_rmw_init_options(&init_options);
+	rmw_uros_options_set_client_key(CLIENT_KEY, rmw_options);
 
-			  //create init_options
-			  rclc_support_init(&support, 0, NULL, &allocator);
+	//support init
+	rclc_support_init_with_options(&support, 0, NULL, &init_options, &allocator);
 
-			  // create node
-			  rclc_node_init_default(&node, "joint_1_node", "", &support);
+	char node_name[13];
+	char topic_pub_name[18];
+	char topic_sub_name[18];
+	char joint_name[8];
 
-			  // create publisher
-			  rclc_publisher_init_default(
-			    &publisher,
-			    &node,
-			    ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, JointState),
-			    "joint_state_pub");
+	sprintf(node_name,"joint_node_%d", MY_CAN_ID);
+	sprintf(topic_pub_name,"joint_state_pub_%d", MY_CAN_ID);
+	sprintf(topic_sub_name,"joint_state_sub_%d", MY_CAN_ID);
+	sprintf(joint_name,"joint_%d", MY_CAN_ID);
 
-			    rcl_ret_t rc = rclc_subscription_init_default(
-			    &subscriber, &node,
-				ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, JointState),
-				"joint_state_sub");
+	// create node
+	rclc_node_init_default(&node, node_name, "", &support);
 
-			executor = rclc_executor_get_zero_initialized_executor();
-			rc = rclc_executor_init(&executor, &support.context, 1, &allocator);
+	// create publisher
+	rclc_publisher_init_default(
+		&publisher,
+		&node,
+		ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, JointState),
+		topic_pub_name);
 
-			rc = rclc_executor_add_subscription(
-			  &executor, &subscriber, &js_in,
-			  &motor_controller_cb, ON_NEW_DATA);
+	rcl_ret_t rc = rclc_subscription_init_default(
+		&subscriber, &node,
+		ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, JointState),
+		topic_sub_name);
 
-			//MSG data filling
+	executor = rclc_executor_get_zero_initialized_executor();
+	rc = rclc_executor_init(&executor, &support.context, 1, &allocator);
 
-				js_out.position.size=1;
-				js_out.position.capacity=1;
-				js_out.position.data = malloc(js_out.position.capacity*sizeof(double));
-				js_out.position.data[0] = 0;
-				js_out.velocity.size=1;
-				js_out.velocity.capacity=1;
-				js_out.velocity.data = malloc(js_out.velocity.capacity*sizeof(double));
-				js_out.velocity.data[0] = 0;
-				js_out.effort.size=1;
-				js_out.effort.capacity=1;
-				js_out.effort.data = malloc(js_out.effort.capacity*sizeof(double));
-				js_out.effort.data[0] = 0;
-				js_out.name.capacity = 1;
-				js_out.name.size = 1;
-				js_out.name.data = (std_msgs__msg__String*) malloc(js_out.name.capacity*sizeof(std_msgs__msg__String));
-				js_out.name.data[0].data = "ruka";
+	rc = rclc_executor_add_subscription(
+		&executor, &subscriber, &js_in,
+		&motor_controller_cb, ON_NEW_DATA);
+
+	//MSG data filling
+
+	js_out.position.size=1;
+	js_out.position.capacity=1;
+	js_out.position.data = malloc(js_out.position.capacity*sizeof(double));
+	js_out.position.data[0] = 0;
+	js_out.velocity.size=1;
+	js_out.velocity.capacity=1;
+	js_out.velocity.data = malloc(js_out.velocity.capacity*sizeof(double));
+	js_out.velocity.data[0] = 0;
+	js_out.effort.size=1;
+	js_out.effort.capacity=1;
+	js_out.effort.data = malloc(js_out.effort.capacity*sizeof(double));
+	js_out.effort.data[0] = 0;
+	js_out.name.capacity = 1;
+	js_out.name.size = 1;
+	js_out.name.data = (std_msgs__msg__String*) malloc(js_out.name.capacity*sizeof(std_msgs__msg__String));
+	js_out.name.data[0].data = joint_name;
 
 
-				js_in.position.size=1;
-				js_in.position.capacity=1;
-				js_in.position.data = malloc(js_in.position.capacity*sizeof(double));
-				js_in.position.data[0] = 0;
-				js_in.velocity.size=1;
-				js_in.velocity.capacity=1;
-				js_in.velocity.data = malloc(js_in.velocity.capacity*sizeof(double));
-				js_in.velocity.data[0] = 0;
-				js_in.effort.size=1;
-				js_in.effort.capacity=1;
-				js_in.effort.data = malloc(js_in.effort.capacity*sizeof(double));
-				js_in.effort.data[0] = 0;
-				js_in.name.capacity = 1;
-				js_in.name.size = 1;
-				js_in.name.data = (std_msgs__msg__String*) malloc(js_in.name.capacity*sizeof(std_msgs__msg__String));
+	js_in.position.size=1;
+	js_in.position.capacity=1;
+	js_in.position.data = malloc(js_in.position.capacity*sizeof(double));
+	js_in.position.data[0] = 0;
+	js_in.velocity.size=1;
+	js_in.velocity.capacity=1;
+	js_in.velocity.data = malloc(js_in.velocity.capacity*sizeof(double));
+	js_in.velocity.data[0] = 0;
+	js_in.effort.size=1;
+	js_in.effort.capacity=1;
+	js_in.effort.data = malloc(js_in.effort.capacity*sizeof(double));
+	js_in.effort.data[0] = 0;
+	js_in.name.capacity = 1;
+	js_in.name.size = 1;
+	js_in.name.data = (std_msgs__msg__String*) malloc(js_in.name.capacity*sizeof(std_msgs__msg__String));
 
 
 	/* Infinite loop */
