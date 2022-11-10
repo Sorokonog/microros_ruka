@@ -61,8 +61,8 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 /* USER CODE BEGIN Private defines */
 #define MY_CAN_ID (1)					// CAN ID OF THIS DEVICE
-#define ROUTER_ID (11)					// CAN ID OF ROUTER DEVICE
-#define CLIENT_KEY (0xCAFEBAB0)         //RMW Client key
+#define ROUTER_ID (11)					// CAN ID OF ROUTER DEVICE SHOULD BE MY_CAN_ID + 10
+#define CLIENT_KEY (0xCAFEBAB1)         //RMW Client key - should be unique for each module
 #define TICKS_PER_CYCLE (200)	// 200
 #define STEPPER_PWM_PRESCALER (0)		// clock speed (80000000) divided by (this + 1) = pwm timer speed
 #define STEPPER_STEP_DEN (256)
@@ -74,6 +74,8 @@ void Error_Handler(void);
 #define PD_ANGLE_THRESHOLD (0.05)
 #define EPSILON (1) //number in ticks to consider goal reached
 #define ENCODER_TO_KALMAN_DEVIATION (0.1) // max angle of deviation to consider something goes wrong and reset the system
+
+#define USE_ENCODER 0
 
 //angle limits
 #define UPPER_ANGLE_LIMIT (6.28) //hard angle limits (wiring purpose)

@@ -396,7 +396,11 @@ void I2CTask01(void *argument)
 {
   /* USER CODE BEGIN I2CTask01 */
 	//run once at start
+#if USE_ENCODER == 1
 	  init_angle = get_encoder_angle();
+#else
+	  init_angle = 0;
+#endif
 	  prev_kalman_angle = init_angle;
 	  lower_angle_limits_in_ticks = - ticks_from_angle(init_angle + LOWER_ANGLE_LIMIT);
 	  upper_angle_limits_in_ticks = ticks_from_angle(UPPER_ANGLE_LIMIT - init_angle);
@@ -423,6 +427,8 @@ void MotorController01(void *argument)
   /* USER CODE BEGIN MotorController01 */
 	upper_velocity_limits_in_radians = pi_2 / (STEPPER_STEP_DEN * TICKS_PER_CYCLE * GEAR_RATIO / APB1_TIMER_CLOCK_FREQUENCY * MIN_PWM_TIMER_PERIOD);
 	k_of_linear_part_of_traj_pwm_timer_period = MIN_PWM_TIMER_PERIOD * upper_velocity_limits_in_radians;
+	int Kp= 1/PD_ANGLE_THRESHOLD;
+
 
   /* Infinite loop */
   for(;;)
@@ -441,7 +447,8 @@ void MotorController01(void *argument)
 	  	  case(Idle):
 	  			  break;
 	  	  case(Go):
-					target_angle_delta = angle_to_go - kalman_angle;
+				target_angle_delta = angle_to_go - kalman_angle;
+	  	        double init_angle_delta = fabs(init_angle_target - kalman_angle);
 			  	  if (target_angle_delta > 0)
 			  	  {
 			  		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
@@ -450,23 +457,26 @@ void MotorController01(void *argument)
 			  	  {
 			  		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
 			  	  }
-						ticks_to_go = ticks_from_angle(target_angle_delta) + pwm_tick_counter;
-			  	  	  	if(fabs(target_angle_delta) < PD_ANGLE_THRESHOLD)
-			  	  	  	{
-						pwm_timer_period = (long)((MAX_PWM_TIMER_PERIOD - linear_part_of_traj_pwm_timer_period) * fabs(target_angle_delta) + linear_part_of_traj_pwm_timer_period); //TODO Kp add and some minor tests
-			  	  	  	pwm_pulse_period = (long)(pwm_timer_period / 2);
-			  	  	  	}
-			  	  	  	else if(fabs(init_angle_target - kalman_angle) < PD_ANGLE_THRESHOLD)
-			  	  	  	{
-						pwm_timer_period = (long)(MAX_PWM_TIMER_PERIOD - (MAX_PWM_TIMER_PERIOD - linear_part_of_traj_pwm_timer_period) * fabs(init_angle_target - kalman_angle)*1/PD_ANGLE_THRESHOLD); //TODO Kp add and some minor tests
-				  	  	pwm_pulse_period = (long)(pwm_timer_period / 2);
-			  	  	  	}
-			  	  	  	else
-			  	  	  	{
-			  	  	  		//TODO velocity
-			  	  	  	pwm_timer_period = linear_part_of_traj_pwm_timer_period;
-			  	  	  	pwm_pulse_period = (long)(pwm_timer_period / 2);
-			  	  	  	}
+
+			  	ticks_to_go = ticks_from_angle(target_angle_delta) + pwm_tick_counter;
+
+					if(fabs(target_angle_delta) < PD_ANGLE_THRESHOLD)
+					{
+					pwm_timer_period = (long)((MAX_PWM_TIMER_PERIOD - linear_part_of_traj_pwm_timer_period) * fabs(target_angle_delta) + linear_part_of_traj_pwm_timer_period);
+					pwm_pulse_period = (long)(pwm_timer_period / 2);
+					}
+					else if(init_angle_delta < PD_ANGLE_THRESHOLD)
+					{
+					pwm_timer_period = (long)(MAX_PWM_TIMER_PERIOD - (MAX_PWM_TIMER_PERIOD - linear_part_of_traj_pwm_timer_period) * init_angle_delta * Kp);
+					pwm_pulse_period = (long)(pwm_timer_period / 2);
+					}
+					else
+					{
+					pwm_timer_period = linear_part_of_traj_pwm_timer_period;
+					pwm_pulse_period = (long)(pwm_timer_period / 2);
+					}
+				TIM3->ARR = pwm_timer_period;
+				TIM3->CCR1 = pwm_pulse_period;
 	  	  	  	state_of_controller = Go;
 	  	  	  	break;
 		}
@@ -493,10 +503,12 @@ void Soft_WD_Task04(void *argument)
 	 {
 		 NVIC_SystemReset();
 	 }
+#if USE_ENCODER == 0
 	 if (fabs(encoder_angle - kalman_angle) > ENCODER_TO_KALMAN_DEVIATION)
 	 {
 		 NVIC_SystemReset();
 	 }
+#endif
     vTaskDelay(300);
 
   }
@@ -564,7 +576,11 @@ double get_kalman_angle()
 		ticks_c = 0.1;
 		encoder_c = 0.9;
 	}
+#if USE_ENCODER == 1
 	encoder_angle = get_encoder_angle();
+#else
+	encoder_angle = angle_from_ticks(pwm_tick_counter);
+#endif
 	curent_kalman_angle = prev_kalman_angle + (angle_from_ticks(pwm_tick_counter) - prev_kalman_angle + init_angle) * ticks_c + (encoder_angle - prev_kalman_angle) * encoder_c;
 	prev_kalman_angle = curent_kalman_angle;
 	return curent_kalman_angle;
