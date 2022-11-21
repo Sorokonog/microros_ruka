@@ -524,13 +524,23 @@ const sensor_msgs__msg__JointState * js_in = (const sensor_msgs__msg__JointState
 angle_to_go = js_in->position.data[0];
 velocity_to_go = js_in->velocity.data[0];
 effort_to_go = js_in->effort.data[0];
+
 if (effort_to_go == 0)
 {
+
 	state_of_controller = Idle;
+	TIM3->CCR1 = 0;
+	TIM3->ARR = IDLE_PWM_TIMER_PERIOD;
+	real_velocity_to_go = 0;
+
 }
 else if(velocity_to_go == 0)
 {
 	state_of_controller = Stop;
+	TIM3->CCR1 = 0;
+	TIM3->ARR = IDLE_PWM_TIMER_PERIOD;
+	real_velocity_to_go = 0;
+
 }
 else if(effort_to_go != prev_effort)
 {
@@ -538,15 +548,77 @@ else if(effort_to_go != prev_effort)
 	init_angle_target = kalman_angle;
     real_velocity_to_go = clamp_value(velocity_to_go, lower_velocity_limits_in_radians, upper_velocity_limits_in_radians);
 	linear_part_of_traj_pwm_timer_period = (long)(k_of_linear_part_of_traj_pwm_timer_period / real_velocity_to_go);
+	target_angle_delta = angle_to_go - kalman_angle;
+      double init_angle_delta = fabs(init_angle_target - kalman_angle);
+  	  if (target_angle_delta > 0)
+  	  {
+  		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
+  	  }
+  	  else
+  	  {
+  		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
+  	  }
+
+  	ticks_to_go = ticks_from_angle(target_angle_delta) + pwm_tick_counter;
+
+		if(fabs(target_angle_delta) < PD_ANGLE_THRESHOLD)
+		{
+		pwm_timer_period = (long)((MAX_PWM_TIMER_PERIOD - linear_part_of_traj_pwm_timer_period) * fabs(target_angle_delta) + linear_part_of_traj_pwm_timer_period);
+		pwm_pulse_period = (long)(pwm_timer_period / 2);
+		}
+		else if(init_angle_delta < PD_ANGLE_THRESHOLD)
+		{
+		pwm_timer_period = (long)(MAX_PWM_TIMER_PERIOD - (MAX_PWM_TIMER_PERIOD - linear_part_of_traj_pwm_timer_period) * init_angle_delta * Kp);
+		pwm_pulse_period = (long)(pwm_timer_period / 2);
+		}
+		else
+		{
+		pwm_timer_period = linear_part_of_traj_pwm_timer_period;
+		pwm_pulse_period = (long)(pwm_timer_period / 2);
+		}
+	TIM3->ARR = pwm_timer_period;
+	TIM3->CCR1 = pwm_pulse_period;
 	state_of_controller = Go;
 	prev_effort = effort_to_go;
+
 }
 else
 {
 	init_angle_target = kalman_angle;
     real_velocity_to_go = clamp_value(velocity_to_go, lower_velocity_limits_in_radians, upper_velocity_limits_in_radians);
 	linear_part_of_traj_pwm_timer_period = (long)(k_of_linear_part_of_traj_pwm_timer_period / real_velocity_to_go);
+	target_angle_delta = angle_to_go - kalman_angle;
+      double init_angle_delta = fabs(init_angle_target - kalman_angle);
+  	  if (target_angle_delta > 0)
+  	  {
+  		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
+  	  }
+  	  else
+  	  {
+  		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
+  	  }
+
+  	ticks_to_go = ticks_from_angle(target_angle_delta) + pwm_tick_counter;
+
+		if(fabs(target_angle_delta) < PD_ANGLE_THRESHOLD)
+		{
+		pwm_timer_period = (long)((MAX_PWM_TIMER_PERIOD - linear_part_of_traj_pwm_timer_period) * fabs(target_angle_delta) + linear_part_of_traj_pwm_timer_period);
+		pwm_pulse_period = (long)(pwm_timer_period / 2);
+		}
+		else if(init_angle_delta < PD_ANGLE_THRESHOLD)
+		{
+		pwm_timer_period = (long)(MAX_PWM_TIMER_PERIOD - (MAX_PWM_TIMER_PERIOD - linear_part_of_traj_pwm_timer_period) * init_angle_delta * Kp);
+		pwm_pulse_period = (long)(pwm_timer_period / 2);
+		}
+		else
+		{
+		pwm_timer_period = linear_part_of_traj_pwm_timer_period;
+		pwm_pulse_period = (long)(pwm_timer_period / 2);
+		}
+	TIM3->ARR = pwm_timer_period;
+	TIM3->CCR1 = pwm_pulse_period;
 	state_of_controller = Go;
+
 }
 }
 
