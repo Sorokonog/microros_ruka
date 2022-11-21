@@ -29,4 +29,4 @@
 #STM32
 1. Скачать STM CubeIDE и CubeMX (Если вы хотите использовать какие-то свои инструменты, то данный гайд направит вас по нужному пути, но возможно не все заработает из коробки, для STM Cube все оттестировано и работает)
 2. Создайте новый Cube MX проект (!!!ВНИМАНИЕ!!! именно MX, а не IDE)
-3. Настройте тактирование в соответствии с характеристиками STM, примерно так: ![alt text](https://github.com/sorokonog/microros_ruka/img/clock.jpg?raw=true)
+3. Настройте тактирование в соответствии с характеристиками STM, примерно так: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/main/img/clock.jpg?raw=true)
