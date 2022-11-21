@@ -1,37 +1,50 @@
 # microros_ruka
-#Последовательность установки:
+Последовательность установки:
 ##Распберри
-1. Используя Raspberry Imager накатить на SD `Ubuntu Server 22.04+`
-2. Зайти на распберри и установить `ROS2 Humble-ROS-base` стандартным способом
+* Используя Raspberry Imager накатить на SD `Ubuntu Server 22.04+`
+* Зайти на распберри и установить `ROS2 Humble-ROS-base` стандартным способом
     2.1 Настроить setup.bash стандартным образом
-3. Включить CAN (описано тут https://wiki.seeedstudio.com/2-Channel-CAN-BUS-FD-Shield-for-Raspberry-Pi/#software)
+* Включить CAN (описано тут https://wiki.seeedstudio.com/2-Channel-CAN-BUS-FD-Shield-for-Raspberry-Pi/#software)
     3.1 Добавить в раздел [All] файла `/boot/firmware/config.txt`
         `dtoverlay=seeed-can-fd-hat-v2`
     3.2 Добавить в автозагрузку, например в `.bashrc`
         `sudo ip link set can0 up type can bitrate 1000000 dbitrate 8000000 restart-ms 1000 berr-reporting on fd on`
 
-4. `mkdir uros_ws && cd uros_ws` (Устанавливаем микророс описано тут: https://github.com/micro-ROS/micro_ros_setup)
-5. `git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup`
-6. `rosdep update && rosdep install --from-paths src --ignore-src -y`
-7. `colcon build`
-8. `source install/local_setup.bash`
-9. `ros2 run micro_ros_setup create_agent_ws.sh`
-10. `ros2 run micro_ros_setup build_agent.sh`
-11. `cd`
-12. `git clone https://github.com/Sorokonog/microros_ruka.git` (клонировать репо в домашнюю директорию)
-13. `cp /microros_ruka/custom_agent.cpp /uros_ws/build/micro_ros_agent/agent/src/xrceagent/examples/custom_agent/custom_agent.cpp` (копируем кастомный транспорт для CAN)
-14. В файле `/home/pi/uros_ws/build/micro_ros_agent/agent/src/xrceagent/CMakeLists.txt` поменять значение параметра `option(UAGENT_BUILD_USAGE_EXAMPLES "Build Micro XRCE-DDS Agent built-in usage examples" OFF)` на `ON` (заставляем собирать custom_agent.cpp)
-15. `rm -rf /home/pi/uros_ws/build/micro_ros_agent/agent/src/xrceagent-build/CMakeCache.txt`
-16. `cd /uros_ws/build/micro_ros_agent/agent/src/xrceagent-build`
-17. `make -j1` (пересобираем все занимает около 20-30 минут)
-18. `cd && ./home/pi/uros_ws/build/micro_ros_agent/agent/src/xrceagent-build/examples/custom_agent/CustomXRCEAgent` (Запускаем агента)
+* `mkdir uros_ws && cd uros_ws` (Устанавливаем микророс описано тут: https://github.com/micro-ROS/micro_ros_setup)
+* `git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup`
+* `rosdep update && rosdep install --from-paths src --ignore-src -y`
+* `colcon build`
+* `source install/local_setup.bash`
+* `ros2 run micro_ros_setup create_agent_ws.sh`
+* `ros2 run micro_ros_setup build_agent.sh`
+* `cd`
+* `git clone https://github.com/Sorokonog/microros_ruka.git` (клонировать репо в домашнюю директорию)
+* `cp /microros_ruka/custom_agent.cpp /uros_ws/build/micro_ros_agent/agent/src/xrceagent/examples/custom_agent/custom_agent.cpp` (копируем кастомный транспорт для CAN)
+* В файле `/home/pi/uros_ws/build/micro_ros_agent/agent/src/xrceagent/CMakeLists.txt` поменять значение параметра `option(UAGENT_BUILD_USAGE_EXAMPLES "Build Micro XRCE-DDS Agent built-in usage examples" OFF)` на `ON` (заставляем собирать custom_agent.cpp)
+* `rm -rf /home/pi/uros_ws/build/micro_ros_agent/agent/src/xrceagent-build/CMakeCache.txt`
+* `cd /uros_ws/build/micro_ros_agent/agent/src/xrceagent-build`
+* `make -j1` (пересобираем все занимает около 20-30 минут)
+* `cd && ./home/pi/uros_ws/build/micro_ros_agent/agent/src/xrceagent-build/examples/custom_agent/CustomXRCEAgent` (Запускаем агента)
 
 ##STM32
-1. Скачать STM CubeIDE и CubeMX (Если вы хотите использовать какие-то свои инструменты, то данный гайд направит вас по нужному пути, но возможно не все заработает из коробки, для STM Cube все оттестировано и работает)
-2. Создайте новый Cube MX проект (<b>!!!ВНИМАНИЕ!!!</b> именно MX, а не IDE)
-3. Настройте тактирование в соответствии с характеристиками STM, примерно так: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/main/img/clock.jpg?raw=true)
-4. В `System Core -> SYS -> Timebase Source` выберете `TIM1`
-5. В `Middleware -> FREERTOS -> Interface` выберете `CMSIS_V2`
-6. В `Middleware -> FREERTOS -> Configuration -> Task and Queues -> Deafult Task` задайте `stack size` = 3000.
-7. В `Connectivity` выберете `CAN / CAN1`.
-8. 
+* Скачать STM CubeIDE и CubeMX (Если вы хотите использовать какие-то свои инструменты, то данный гайд направит вас по нужному пути, но возможно не все заработает из коробки, для STM Cube все оттестировано и работает)
+* Создайте новый Cube MX проект (**!!!ВНИМАНИЕ!!!** именно MX, а не IDE)
+* В `System Core -> RCC -> High Speed Clock (HSE)` выберете `Crystal/Ceramic Resonator` и Настройте тактирование в соответствии с характеристиками STM, примерно так: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/main/img/clock.jpg?raw=true)
+* В `System Core -> SYS -> Timebase Source` выберете `TIM1`
+
+###CAN
+* В `Connectivity` выберете `CAN / CAN1`
+* На экране настройки GPIO выберете `PB8 - CAN1 RX, PB9 - CAN1 TX`
+9. Настройте CAN следующим образом: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/main/img/CAN1.jpg?raw=true) 
+* В `NVIC Settings` включите `CAN1 RX0 interrupt`
+###I2C
+* В `Connectivity` выберете `I2C1` ->  Mode `I2C`
+* Проверьте что настройки по умолчанию не сбились: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/main/img/I2C.jpg?raw=true) 
+* На экране настройки GPIO выберете `PB6 - I2C1_SCL, I2C1_SDA`
+###SPI
+* В `Connectivity` выберете `SPI1` ->  Mode `Full-Duplex Master`
+* Настройте `Parametr Settings` в соответствии с картинкой: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/main/img/SPI.jpg?raw=true)
+###FreeRTOS
+* В `Middleware -> FREERTOS -> Interface` выберете `CMSIS_V2`
+* В `Middleware -> FREERTOS -> Configuration -> Task and Queues -> Deafult Task` задайте `stack size` = 3000.
+*
