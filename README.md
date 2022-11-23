@@ -97,7 +97,8 @@ print_cflags:
   @echo $(CFLAGS)
 ```
 
-* В `Makefile` в раздел 
+* В `Makefile` в раздел `Sources`
+```makefile
 ######################################
 # source
 ######################################
@@ -106,6 +107,7 @@ C_SOURCES = \
 ...
 Core/Src/syscalls.c \
 ...
+```
 
 
 ### Перенос файлов проекта

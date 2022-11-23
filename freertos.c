@@ -110,6 +110,7 @@ double real_velocity_to_go = 0;
 long lower_velocity_limits_in_radians = 0;
 double upper_velocity_limits_in_radians = 0;
 double k_of_linear_part_of_traj_pwm_timer_period = 0;
+int Kp = 0;
 
 long linear_part_of_traj_pwm_timer_period = 0;
 
@@ -259,6 +260,11 @@ void MX_FREERTOS_Init(void) {
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
+
+	//PRE init
+	upper_velocity_limits_in_radians = pi_2 / (STEPPER_STEP_DEN * TICKS_PER_CYCLE * GEAR_RATIO / APB1_TIMER_CLOCK_FREQUENCY * MIN_PWM_TIMER_PERIOD);
+	k_of_linear_part_of_traj_pwm_timer_period = MIN_PWM_TIMER_PERIOD * upper_velocity_limits_in_radians;
+	Kp= 1/PD_ANGLE_THRESHOLD;
 
 	rcl_publisher_t publisher;
 	rcl_subscription_t subscriber;
@@ -425,10 +431,6 @@ void I2CTask01(void *argument)
 void MotorController01(void *argument)
 {
   /* USER CODE BEGIN MotorController01 */
-	upper_velocity_limits_in_radians = pi_2 / (STEPPER_STEP_DEN * TICKS_PER_CYCLE * GEAR_RATIO / APB1_TIMER_CLOCK_FREQUENCY * MIN_PWM_TIMER_PERIOD);
-	k_of_linear_part_of_traj_pwm_timer_period = MIN_PWM_TIMER_PERIOD * upper_velocity_limits_in_radians;
-	int Kp= 1/PD_ANGLE_THRESHOLD;
-
 
   /* Infinite loop */
   for(;;)
@@ -524,10 +526,6 @@ const sensor_msgs__msg__JointState * js_in = (const sensor_msgs__msg__JointState
 angle_to_go = js_in->position.data[0];
 velocity_to_go = js_in->velocity.data[0];
 effort_to_go = js_in->effort.data[0];
-
-upper_velocity_limits_in_radians = pi_2 / (STEPPER_STEP_DEN * TICKS_PER_CYCLE * GEAR_RATIO / APB1_TIMER_CLOCK_FREQUENCY * MIN_PWM_TIMER_PERIOD);
-k_of_linear_part_of_traj_pwm_timer_period = MIN_PWM_TIMER_PERIOD * upper_velocity_limits_in_radians;
-int Kp= 1/PD_ANGLE_THRESHOLD;
 
 if (effort_to_go == 0)
 {
@@ -641,7 +639,7 @@ double get_encoder_angle()
 
 double get_kalman_angle()
 {
-	//Kalman like filtering
+	//Kalman-like filtering
 	if (TIM3->CCR1 != 0)
 	{
 		ticks_c = 0.9;
