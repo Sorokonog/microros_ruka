@@ -21,7 +21,7 @@
 * `ros2 run micro_ros_setup create_agent_ws.sh`
 * `ros2 run micro_ros_setup build_agent.sh`
 * `cd`
-* `git clone https://github.com/Sorokonog/microros_ruka.git` (клонировать репо в домашнюю директорию)
+* `git clone https://github.com/Sorokonog/microros_ruka.git` (клонировать этот проект в домашнюю директорию)
 * `cp /microros_ruka/custom_agent.cpp /uros_ws/build/micro_ros_agent/agent/src/xrceagent/examples/custom_agent/custom_agent.cpp` (копируем кастомный транспорт для CAN)
 * В файле `/home/pi/uros_ws/build/micro_ros_agent/agent/src/xrceagent/CMakeLists.txt` поменять значение параметра `option(UAGENT_BUILD_USAGE_EXAMPLES "Build Micro XRCE-DDS Agent built-in usage examples" OFF)` на `ON` (заставляем собирать custom_agent.cpp)
 * `rm -rf /home/pi/uros_ws/build/micro_ros_agent/agent/src/xrceagent-build/CMakeCache.txt`
@@ -70,13 +70,15 @@
 * В `Middleware -> FREERTOS -> Configuration -> Task and Queues -> Deafult Task` **TODO**
 
 ### Genrate code
+* Финальная настройка должна выглядеть вот так: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/main/img/PINOUT.jpg?raw=true)
 * Кликните на `Generate Code`
-* Сохраните проект
 
 ## MicroROS библиотека
+
 * В директории этого нового проекта `git clone https://github.com/micro-ROS/micro_ros_stm32cubemx_utils.git` (рекомендуется использовать WSL, но можно и PowerShell)
-* В `Makefile` после раздела `Build the application` вставьте
-<
+* В `Makefile` перед разделом `Build the application` вставьте:
+
+```makefile
 #######################################
 # micro-ROS addons
 #######################################
@@ -93,4 +95,34 @@ C_SOURCES += micro_ros_stm32cubemx_utils/extra_sources/microros_transports/dma_t
 
 print_cflags:
   @echo $(CFLAGS)
->
+```
+
+* В `Makefile` в раздел 
+######################################
+# source
+######################################
+# C sources вставьте:
+C_SOURCES = \
+...
+Core/Src/syscalls.c \
+...
+
+
+### Перенос файлов проекта
+* Перенесите файлы `main.c freertos.c iwdg.c syscalls.c tim.c` из директории в которую вы клонировали этот проект `microros_ruka` в директорию `Core/Src/` вашего проекта
+* Перенесите файл `dma_transport.c` из директории в которую вы клонировали этот проект `microros_ruka` в директорию `micro_ros_stm32cubemx_utils/extra_sources/microros_transports/` вашего проекта
+* Перенесите файлы `main.h` из директории в которую вы клонировали этот проект`microros_ruka` в директорию `Core/Inc/` вашего проекта
+
+### Docker часть
+* Установите Docker (данный гайд оттестирован при установке Docker в WSL, если вы устанавливаете Docker напрямую в Windows, адаптируйте команды соответственно)
+* Из корневой директории проекта:
+```bash
+docker pull microros/micro_ros_static_library_builder:humble
+docker run -it --rm -v $(pwd):/project --env MICROROS_LIBRARY_FOLDER=micro_ros_stm32cubemx_utils/microros_static_library microros/micro_ros_static_library_builder:humble
+```
+
+## Cube IDE
+* Выберете новый проект `New` -> `Makefile Projects from Existing Code`
+* Выберете папку с вашим проектом
+* Правой кнопкой на проект `Run as` -> `STM32 C/C++ Application`
+

@@ -525,6 +525,10 @@ angle_to_go = js_in->position.data[0];
 velocity_to_go = js_in->velocity.data[0];
 effort_to_go = js_in->effort.data[0];
 
+upper_velocity_limits_in_radians = pi_2 / (STEPPER_STEP_DEN * TICKS_PER_CYCLE * GEAR_RATIO / APB1_TIMER_CLOCK_FREQUENCY * MIN_PWM_TIMER_PERIOD);
+k_of_linear_part_of_traj_pwm_timer_period = MIN_PWM_TIMER_PERIOD * upper_velocity_limits_in_radians;
+int Kp= 1/PD_ANGLE_THRESHOLD;
+
 if (effort_to_go == 0)
 {
 
