@@ -44,7 +44,7 @@
 * `PC7` - GPIO_Output
 
 ## Timers
-* `TIM3 Channel1` - PWM_Generation, `Prescaler` = 1, NVIC Settings включить `TIM3 global interrupt`
+* `PC6 - TIM3 CH1` `TIM3 Channel1` - PWM_Generation, `Prescaler` = 1, NVIC Settings включить `TIM3 global interrupt`
 
 ## IWDG
 * Активируйте IWDG и сконфигурируйте его в соответсвии с картинкой: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/main/img/IWDG.jpg?raw=true)
