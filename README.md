@@ -49,6 +49,9 @@
 ## IWDG
 * Активируйте IWDG и сконфигурируйте его в соответсвии с картинкой: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/main/img/IWDG.jpg?raw=true)
 
+## DMA
+* Активируйте DMA и сконфигурируйте его в соответсвии с картинкой: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/main/img/image.jpg?raw=true)
+
 ### CAN
 * В `Connectivity` выберете `CAN / CAN1`
 * На экране настройки GPIO выберете `PB8 - CAN1 RX, PB9 - CAN1 TX`
