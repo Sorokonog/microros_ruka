@@ -36,7 +36,7 @@
 * В `Project Manager -> Code Generator` выберете `Generate peripheral intitialization as a pair of '.c/.h' files per peripheral` (опционально)
 
 ## Общие настройки STM
-* В `System Core -> RCC -> High Speed Clock (HSE)` выберете `Crystal/Ceramic Resonator` и Настройте тактирование в соответствии с характеристиками STM, примерно так: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/tree/G4/img/clock.jpg?raw=true)
+* В `System Core -> RCC -> High Speed Clock (HSE)` выберете `Crystal/Ceramic Resonator` и Настройте тактирование в соответствии с характеристиками STM, примерно так: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/G4/img/clock.jpg?raw=true)
 * В `System Core -> SYS -> Timebase Source` выберете `TIM1`
 * `PA4` - GPIO_Output
 * `PD2` - GPIO_Output
@@ -47,25 +47,25 @@
 * `PC6 - TIM3 CH1` `TIM3 Channel1` - PWM_Generation, `Prescaler` = 1, NVIC Settings включить `TIM3 global interrupt`
 
 ## IWDG
-* Активируйте IWDG и сконфигурируйте его в соответсвии с картинкой: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/tree/G4/img/IWDG.jpg?raw=true)
+* Активируйте IWDG и сконфигурируйте его в соответсвии с картинкой: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/G4/img/IWDG.jpg?raw=true)
 
 ## DMA
-* Активируйте DMA и сконфигурируйте его в соответсвии с картинкой: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/tree/G4/img/DMA.jpg?raw=true)
+* Активируйте DMA и сконфигурируйте его в соответсвии с картинкой: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/G4/img/DMA.jpg?raw=true)
 
 ### FDCAN
 * В `Connectivity` выберете `FDCAN1`
 * На экране настройки GPIO выберете `PB8 - CAN1 RX, PB9 - CAN1 TX`
-9. Настройте CAN следующим образом: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/tree/G4/img/FDCAN.jpg?raw=true) 
+9. Настройте CAN следующим образом: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/G4/img/FDCAN.jpg?raw=true) 
 * В `NVIC Settings` включите `FDCAN1 interrupt 0`
 
 ### I2C **TODO**
 * В `Connectivity` выберете `I2C1` ->  Mode `I2C`
-* Проверьте что настройки по умолчанию не сбились: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/tree/G4/img/I2C.jpg?raw=true) 
+* Проверьте что настройки по умолчанию не сбились: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/G4/img/I2C.jpg?raw=true) 
 * На экране настройки GPIO выберете `PB6 - I2C1_SCL, I2C1_SDA`
 
 ### SPI **TODO**
 * В `Connectivity` выберете `SPI1` ->  Mode `Full-Duplex Master`
-* Настройте `Parametr Settings` в соответствии с картинкой: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/tree/G4/img/SPI.jpg?raw=true)
+* Настройте `Parametr Settings` в соответствии с картинкой: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/G4/img/SPI.jpg?raw=true)
 
 ### FreeRTOS **TODO**
 * В `Middleware -> FREERTOS -> Interface` выберете `CMSIS_V2`
@@ -73,7 +73,7 @@
 * В `Middleware -> FREERTOS -> Configuration -> Task and Queues -> Deafult Task` **TODO**
 
 ### Genrate code
-* Финальная настройка должна выглядеть вот так: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/tree/G4/img/PINOUT.jpg?raw=true)
+* Финальная настройка должна выглядеть вот так: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/G4/img/PINOUT.jpg?raw=true)
 * Кликните на `Generate Code`
 
 ## MicroROS библиотека
