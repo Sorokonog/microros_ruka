@@ -1,4 +1,4 @@
-# microros_ruka
+# microros_ruka G4
 Последовательность установки:
 ## Распберри
 # Ubuntu
@@ -31,7 +31,7 @@
 
 ## STM32
 * Скачать STM CubeIDE и CubeMX (Если вы хотите использовать какие-то свои инструменты, то данный гайд направит вас по нужному пути, но возможно не все заработает из коробки, для STM Cube все оттестировано и работает)
-* Создайте новый Cube MX проект (**!!!ВНИМАНИЕ!!!** именно MX, а не IDE)
+* Создайте новый Cube MX проект (**!!!ВНИМАНИЕ!!!** именно Cube MX, а не Cube IDE)
 * В `Project Manager` выберете `toolchain` - `Makefile`
 * В `Project Manager -> Code Generator` выберете `Generate peripheral intitialization as a pair of '.c/.h' files per peripheral` (опционально)
 
@@ -52,22 +52,22 @@
 ## DMA
 * Активируйте DMA и сконфигурируйте его в соответсвии с картинкой: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/main/img/DMA.jpg?raw=true)
 
-### CAN
-* В `Connectivity` выберете `CAN / CAN1`
+### FDCAN
+* В `Connectivity` выберете `FDCAN1`
 * На экране настройки GPIO выберете `PB8 - CAN1 RX, PB9 - CAN1 TX`
-9. Настройте CAN следующим образом: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/main/img/CAN1.jpg?raw=true) 
-* В `NVIC Settings` включите `CAN1 RX0 interrupt`
+9. Настройте CAN следующим образом: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/main/img/FDCAN.jpg?raw=true) 
+* В `NVIC Settings` включите `FDCAN1 interrupt 0`
 
-### I2C
+### I2C **TODO**
 * В `Connectivity` выберете `I2C1` ->  Mode `I2C`
 * Проверьте что настройки по умолчанию не сбились: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/main/img/I2C.jpg?raw=true) 
 * На экране настройки GPIO выберете `PB6 - I2C1_SCL, I2C1_SDA`
 
-### SPI
+### SPI **TODO**
 * В `Connectivity` выберете `SPI1` ->  Mode `Full-Duplex Master`
 * Настройте `Parametr Settings` в соответствии с картинкой: ![alt text](https://github.com/Sorokonog/microros_ruka/blob/main/img/SPI.jpg?raw=true)
 
-### FreeRTOS
+### FreeRTOS **TODO**
 * В `Middleware -> FREERTOS -> Interface` выберете `CMSIS_V2`
 * В `Middleware -> FREERTOS -> Configuration -> Task and Queues -> Deafult Task` задайте `stack size` = 3000.
 * В `Middleware -> FREERTOS -> Configuration -> Task and Queues -> Deafult Task` **TODO**
@@ -113,7 +113,7 @@ Core/Src/syscalls.c \
 ### Перенос файлов проекта
 * Перенесите файлы `main.c freertos.c iwdg.c syscalls.c tim.c` из директории в которую вы клонировали этот проект `microros_ruka` в директорию `Core/Src/` вашего проекта
 * Перенесите файл `dma_transport.c` из директории в которую вы клонировали этот проект `microros_ruka` в директорию `micro_ros_stm32cubemx_utils/extra_sources/microros_transports/` вашего проекта
-* Перенесите файлы `main.h` из директории в которую вы клонировали этот проект`microros_ruka` в директорию `Core/Inc/` вашего проекта
+* Перенесите файлы `main.h`, `fdcan_starter.h` из директории в которую вы клонировали этот проект`microros_ruka` в директорию `Core/Inc/` вашего проекта
 
 ### Docker часть
 * Установите Docker (данный гайд оттестирован при установке Docker в WSL, если вы устанавливаете Docker напрямую в Windows, адаптируйте команды соответственно)

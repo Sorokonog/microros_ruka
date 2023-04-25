@@ -19,6 +19,10 @@
 
 #include <linux/can.h>
 #include <linux/can/raw.h>
+//#include <linux/can/length.h>
+
+
+#include <errno.h>
 
 /**
  * This custom XRCE Agent example attempts to show how easy is for the user to define a custom
@@ -31,6 +35,8 @@
  * Other transport protocols might need to implement their own endpoint struct.
  */
 int64_t time_ms(void);
+uint8_t len_to_dlc(size_t * len);
+
 
 int main(int argc, char** argv)
 {
@@ -40,23 +46,27 @@ int main(int argc, char** argv)
     struct sockaddr_can addr;
     struct ifreq ifr;
 
+    uint32_t router_id = 127; 
+
+    int enable_canfd = 1;
+
+    static const uint8_t len2dlc[65] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9 , 9, 10, 10, 10, 10, 11, 11, 11, 11, 12, 12, 12, 12, 13, 13, 13, 13, 13, 13, 13, 13, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15};
+    static const uint8_t dlc2len[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64};
+    
     /**
      * @brief Agent's initialization behaviour description.
      */
     eprosima::uxr::CustomAgent::InitFunction init_function = [&]() -> bool
     {
-        struct canfd_frame frame;
-        struct can_frame rec_frame;
-
         bool rv = false;
 
         if ((poll_fd.fd = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) 
         {
-		perror("socket creation: ");
+		perror("CAN socket creation fail: ");
 		return false;
         }
         
-        if (-1 != poll_fd.fd)
+        if (-1 != poll_fd.fd) //CAN start
         {
             struct sockaddr_in address{};
             strcpy(ifr.ifr_name, "can0");
@@ -64,15 +74,24 @@ int main(int argc, char** argv)
             poll_fd.events = POLLIN;
             addr.can_family  = AF_CAN;
             addr.can_ifindex = ifr.ifr_ifindex;
-            if (-1 != bind(poll_fd.fd,
+            if (-1 != bind(poll_fd.fd,      //Binding CAN soc
                 (struct sockaddr *)&addr,
                 sizeof(addr)))
                 {
+                    //enabling CANFD if it happens work with it
+                    if (-1 != setsockopt(poll_fd.fd, SOL_CAN_RAW, CAN_RAW_FD_FRAMES,
+                    &enable_canfd, sizeof(enable_canfd)))
+                    {
                     rv = true;
+                    }
+                    else
+                    {
+                    enable_canfd = 0;
+                    }
                 }
             else
             {
-                perror("socket bind: ");
+                perror("CAN socket bind: ");
             }
         }
             {
@@ -124,25 +143,35 @@ int main(int argc, char** argv)
             int timeout,
             eprosima::uxr::TransportRc& transport_rc) -> ssize_t
     {
-        struct can_frame frame;
-        uint16_t rv;
-        rv = 0;
+        struct canfd_frame fdframe;
+        //struct can_frame raw_can_frame;
+
+        uint16_t rv = 0;
         int64_t start = time_ms();
 
-        while ((time_ms() -  start) < timeout || rv > 0)
-	    {
-            rv = poll(&poll_fd, 1, 10);
-                if (rv > 0)
-                {
-                    read(poll_fd.fd,&frame,sizeof(struct can_frame));
-                    memcpy(buffer,&(frame.data),frame.can_dlc);
-                    source_endpoint->set_member_value<uint16_t>("ID",frame.can_id);
-                    transport_rc = (-1 != rv)
-                    ? eprosima::uxr::TransportRc::ok
-                    : eprosima::uxr::TransportRc::server_error;
-                    return frame.can_dlc;
-                 }
+
+        if(enable_canfd == 1)
+        {
+            while ((time_ms() -  start) < timeout || rv > 0)
+            {
+                rv = poll(&poll_fd, 1, 10);
+                    if (rv > 0)
+                    {
+                        read(poll_fd.fd, &fdframe, sizeof(struct canfd_frame));
+                        memcpy(buffer,&(fdframe.data),fdframe.len);
+                        source_endpoint->set_member_value<uint16_t>("ID",fdframe.can_id);
+                        transport_rc = (-1 != rv)
+                        ? eprosima::uxr::TransportRc::ok
+                        : eprosima::uxr::TransportRc::server_error;
+                        return fdframe.len;
+                    }
+            }
         }
+        else
+        {
+            std::cout<<"CAN RAW TODO"<<std::endl;
+        }
+
         transport_rc = eprosima::uxr::TransportRc::timeout_error;
         return -1;
     };
@@ -156,44 +185,63 @@ int main(int argc, char** argv)
         size_t message_length,
         eprosima::uxr::TransportRc& transport_rc) -> ssize_t
     {
-        struct can_frame frame;
+
+        struct canfd_frame fdframe;
+
         uint8_t * ptr = buffer;
-        int rv;
-
-        ssize_t bytes_sent = 0;
-        frame.can_id = destination_endpoint->get_member<uint16_t>("ID") + 10;
-        frame.can_dlc = 8;
-
-        uint16_t cycle, rest;
-        
-        cycle = message_length / frame.can_dlc;
-        rest = message_length % frame.can_dlc;
-
-        for(cycle; cycle>0; cycle--)
+        ssize_t rv;
+        uint8_t len_to_send=0;
+        uint8_t rest_to_send=0;
+        uint8_t cycle = 0;
+        size_t rest = 0;
+          
+        if(enable_canfd == 1)
         {
-            memcpy(&(frame.data),ptr,8);
-            rv = write(poll_fd.fd, &frame, 16);
-            if (rv != -1)
+
+            ssize_t bytes_sent = 0;
+            fdframe.can_id = router_id;
+
+            len_to_send = len_to_dlc(&message_length);
+
+            cycle = message_length / len_to_send;
+            rest = message_length % len_to_send;
+
+            fdframe.len = len_to_send;
+
+            for(cycle; cycle>0; cycle--)
             {
-                bytes_sent += 8;
+                memcpy(&(fdframe.data), ptr, len_to_send);
+                rv = write(poll_fd.fd, &fdframe, sizeof(struct canfd_frame));
+                bytes_sent += len_to_send;
+                ptr += len_to_send;
             }
-            ptr += 8;
-        }
-        if (rest != 0)
-        {
-            frame.can_dlc = rest;
-            memcpy(&(frame.data), ptr, rest);
-            rv = write(poll_fd.fd, &frame,  16);
-            if (rv != -1)
+
+            while (rest != 0)
             {
-                bytes_sent += rest;
-            }    
-        }
+                rest_to_send = len_to_dlc(&rest);
+                fdframe.len = rest_to_send;
+                rest -= rest_to_send;
+                memcpy(&(fdframe.data), ptr, rest_to_send);
+                rv = write(poll_fd.fd, &fdframe, sizeof(struct canfd_frame));
+                bytes_sent += rest_to_send;
+                ptr += rest_to_send;
+            }
+            if (rv == -1)  //TODO REMOVE CHECK FOR PERFORMANCE
+            {
+                perror("Error in sending messge in rest div");
+            }
+        
         transport_rc = (-1 != rv)
         ? eprosima::uxr::TransportRc::ok
         : eprosima::uxr::TransportRc::server_error;
         return bytes_sent;
+        }
+        else
+        {
+            return -1; //TODO CAN_RAW
+        }
     };
+
 
     /**
      * Run the main application.
@@ -250,4 +298,48 @@ int64_t time_ms(void)
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (int64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
+
+uint8_t len_to_dlc(size_t * len)
+{
+    uint8_t dlc = 0;
+    if (* len<= 8)
+    {
+        dlc = (uint8_t) * len;
+    }
+    else if (* len < 12)
+    {
+        dlc = 8;
+    }
+    else if (* len < 16)
+    {
+        dlc = 12;
+    }
+    else if (* len < 20)
+    {
+        dlc = 16;
+    }
+    else if (* len < 24)
+    {
+        dlc = 20;
+    }
+    else if (* len < 32)
+    {
+        dlc = 24;
+    }
+    else if (* len < 48)
+    {
+        dlc = 32;
+    }
+    else if (* len < 64)
+    {
+        dlc = 48;
+    }
+    else
+    {
+        dlc = 64;
+    }
+
+    return dlc;
 }

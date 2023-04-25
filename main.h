@@ -7,7 +7,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2022 STMicroelectronics.
+  * Copyright (c) 2023 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -27,13 +27,11 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f4xx_hal.h"
+#include "stm32g4xx_hal.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#define _USE_MATH_DEFINES
-#include <math.h>
-#include <stdlib.h>
+
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -59,9 +57,10 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+
 /* USER CODE BEGIN Private defines */
-#define MY_CAN_ID (1)					// CAN ID OF THIS DEVICE
-#define ROUTER_ID (11)					// CAN ID OF ROUTER DEVICE SHOULD BE MY_CAN_ID + 10
+#define MY_CAN_ID (5)					// CAN ID OF THIS DEVICE
+#define ROUTER_ID (127)					// CAN ID OF ROUTER DEVICE SHOULD BE MY_CAN_ID + 10
 #define CLIENT_KEY (0xCAFEBAB1)         //RMW Client key - should be unique for each module
 #define TICKS_PER_CYCLE (200)	// 200
 #define STEPPER_PWM_PRESCALER (0)		// clock speed (80000000) divided by (this + 1) = pwm timer speed
@@ -75,7 +74,7 @@ void Error_Handler(void);
 #define EPSILON (1) //number in ticks to consider goal reached
 #define ENCODER_TO_KALMAN_DEVIATION (0.1) // max angle of deviation to consider something goes wrong and reset the system
 
-#define USE_ENCODER 0
+#define USE_ENCODER 1
 
 //angle limits
 #define UPPER_ANGLE_LIMIT (6.28) //hard angle limits (wiring purpose)
@@ -92,7 +91,6 @@ void Error_Handler(void);
 
 #define READ 0x01
 #define WRITE 0x00
-
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

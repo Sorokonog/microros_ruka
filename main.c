@@ -6,7 +6,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2022 STMicroelectronics.
+  * Copyright (c) 2023 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -19,8 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
-#include "can.h"
-#include "dma.h"
+#include "fdcan.h"
 #include "i2c.h"
 #include "iwdg.h"
 #include "spi.h"
@@ -29,16 +28,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
-#include <rcl/rcl.h>
-#include <rcl/error_handling.h>
-#include <rclc/rclc.h>
-#include <rclc/executor.h>
-#include <uxr/client/transport.h>
-#include <rmw_microxrcedds_c/config.h>
-#include <rmw_microros/rmw_microros.h>
-
-
+#include "fdcan_starter.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -58,32 +48,19 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-// CAN Variables
-uint8_t TxData[8];					// Data to be sent via CAN
-uint64_t TxMailbox;					// CAN temporary mailbox. Required by HAL function
-CAN_TxHeaderTypeDef TxHeader;		// Header for can message
-CAN_FilterTypeDef canfilterconfig;	// Filter for receiving CAN messages
-uint8_t RxData[8];					// data received from can bus
-CAN_RxHeaderTypeDef   RxHeader;		// header received by can bus
+FDCAN_TxHeaderTypeDef TxHeader;		// Header for can message
+FDCAN_FilterTypeDef canfdfilterconfig;	// Filter for receiving CAN messages
+FDCAN_RxHeaderTypeDef RxHeader;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
-int CAN_Header_Config(CAN_TxHeaderTypeDef* TxHeader);	// Configures CAN message header.
-int CAN_Filter_Config(CAN_FilterTypeDef* canfilterconfig);	// COnfigures filter for CAN message reception
-int CAN_Starter(CAN_HandleTypeDef* hcan,CAN_FilterTypeDef* canfilterconfig);	//Starts CAN transmittions and receptions
 
-//SPI Functions
-
-void CTRL_Reg_Set();
-void TORQUE_Reg_Set(int torque);
-void STATUS_Reg_Set();
-uint16_t RegAccess(uint8_t operation, uint8_t address, uint16_t value); // Sends or receives SPI message
-
-uint8_t stepper_step_denominator = 8;
-
+void FDCAN_Filter_Config(FDCAN_FilterTypeDef* sFilterConfig);
+void FDCAN_Header_Config(FDCAN_TxHeaderTypeDef* TxHeader);
+void FDCAN_Starter(FDCAN_HandleTypeDef* hfdcan1, FDCAN_FilterTypeDef* sFilterConfig);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -119,32 +96,24 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
-  MX_CAN1_Init();
-  MX_I2C1_Init();
-  MX_SPI1_Init();
-  MX_TIM3_Init();
-  MX_USART1_UART_Init();
+  MX_FDCAN1_Init();
+  MX_I2C3_Init();
   MX_IWDG_Init();
+  MX_SPI1_Init();
+  MX_SPI2_Init();
+  MX_TIM3_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 
-  // initialize motor
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_SET);
-
-	HAL_Delay(1);
-	TORQUE_Reg_Set(0);
-	HAL_Delay(1);
-	CTRL_Reg_Set();
-
-  //initialize CAN
-  CAN_Header_Config(&TxHeader);		// Sets header values
-  CAN_Filter_Config(&canfilterconfig);// Sets filter values
-  CAN_Starter(&hcan1, &canfilterconfig); // starts can
+  FDCAN_Filter_Config(&canfdfilterconfig);
+  FDCAN_Header_Config(&TxHeader);
+  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &canfdfilterconfig) != HAL_OK)
+	{
+	  Error_Handler();
+	}
+  FDCAN_Starter(&hfdcan1, &canfdfilterconfig);
   HAL_Delay(1);
-  //PWM TEST
 
-  HAL_TIM_PWM_Start_IT(&htim3, TIM_CHANNEL_1);
-  HAL_Delay(1);
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -177,8 +146,7 @@ void SystemClock_Config(void)
 
   /** Configure the main internal regulator output voltage
   */
-  __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+  HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1_BOOST);
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -188,11 +156,11 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 4;
-  RCC_OscInitStruct.PLL.PLLN = 160;
+  RCC_OscInitStruct.PLL.PLLM = RCC_PLLM_DIV1;
+  RCC_OscInitStruct.PLL.PLLN = 40;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 2;
-  RCC_OscInitStruct.PLL.PLLR = 2;
+  RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
+  RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -204,95 +172,16 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
   {
     Error_Handler();
   }
 }
 
 /* USER CODE BEGIN 4 */
-
-int CAN_Filter_Config(CAN_FilterTypeDef* canfilterconfig){
-	canfilterconfig->FilterActivation = CAN_FILTER_ENABLE;
-	canfilterconfig->FilterBank = 0;  // which filter bank to use from the assigned ones
-	canfilterconfig->FilterFIFOAssignment = CAN_FILTER_FIFO0;
-	canfilterconfig->FilterMode = CAN_FILTERMODE_IDMASK;
-	canfilterconfig->FilterScale = CAN_FILTERSCALE_32BIT;
-	canfilterconfig->FilterIdHigh = 0x0000;
-	canfilterconfig->FilterIdLow = 0x0000;
-	canfilterconfig->FilterMaskIdHigh = 0x0000;
-	canfilterconfig->FilterMaskIdLow = 0x0000;
-	canfilterconfig->SlaveStartFilterBank = 20;
-	return 1;
-}
-
-int CAN_Header_Config(CAN_TxHeaderTypeDef* TxHeader){
-	TxHeader->IDE = CAN_ID_STD;
-	TxHeader->StdId = MY_CAN_ID;
-	TxHeader->RTR = CAN_RTR_DATA;
-	TxHeader->DLC = 8;
-	return 1;
-}
-
-int CAN_Starter(CAN_HandleTypeDef* hcan,CAN_FilterTypeDef* canfilterconfig){
-	if (HAL_CAN_ConfigFilter(hcan, canfilterconfig) != HAL_OK){		// attempting to register can filter
-			Error_Handler();
-		}
-		if (HAL_CAN_Start(hcan) != HAL_OK){		// attempting to start CAN
-			Error_Handler();
-		}
-		if (HAL_CAN_ActivateNotification(hcan, CAN_IT_RX_FIFO0_MSG_PENDING | CAN_IT_TX_MAILBOX_EMPTY) != HAL_OK){	// attempting to enable CAN interrupts.
-			Error_Handler();								// CAN1_RX0_IRQHandler() is called when an interrupt is triggered
-		}
-	return 1;
-}
-
-void CTRL_Reg_Set(){
-	uint16_t TX = 0x0000;
-	TX += (0x03 << 10); // 850 ns dead time
-	TX += (0x03 << 8); // Gain of 40
-	TX += (stepper_step_denominator << 3);
-	TX += 0x01 ; // Enable motor
-	RegAccess(WRITE, 0x00, TX); // write CTRL Register (Address = 0x00)
-	return;
-}
-
-void TORQUE_Reg_Set(int torque){
-	uint16_t TX = 0x0000;
-	TX += (0x01 << 8); // sample time = 100 us
-	TX += torque; // Torque to set
-	RegAccess(WRITE, 0x01, TX); // write TORQUE Register (Address = 0x01)
-	return;
-}
-
-void STATUS_Reg_Set(){
-	RegAccess(WRITE, 0x07, 0x0000); // write STATUS Register (Address = 0x00)
-}
-
-uint16_t RegAccess(uint8_t operation, uint8_t address, uint16_t value)
-{
-  uint16_t parcel = value;
-
-  parcel += (address << 12); // register address
-  parcel += (operation << 15); // read-write operation choice
-
-  uint16_t received = 0;
-
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
- // HAL_Delay(1);
-  HAL_SPI_TransmitReceive(&hspi1, (uint8_t*)&parcel, (uint8_t*)&received, 1, 1000);
- // HAL_Delay(1);
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
- // HAL_Delay(1);
-  received &= ~0xF000; // clear upper 4 bits, leave lower 12 bits
-
-  return received;
-}
-
-
 
 /* USER CODE END 4 */
 
