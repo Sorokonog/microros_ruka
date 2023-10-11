@@ -119,6 +119,7 @@ Core/Src/syscalls.c \
 * Установите Docker (данный гайд оттестирован при установке Docker в WSL, если вы устанавливаете Docker напрямую в Windows, адаптируйте команды соответственно)
 * Из корневой директории проекта:
 ```bash
+sudo service docker start
 docker pull microros/micro_ros_static_library_builder:humble
 docker run -it --rm -v $(pwd):/project --env MICROROS_LIBRARY_FOLDER=micro_ros_stm32cubemx_utils/microros_static_library microros/micro_ros_static_library_builder:humble
 ```
