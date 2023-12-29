@@ -4,7 +4,7 @@
 # Ubuntu
 * Используя Raspberry Imager накатить на SD `Ubuntu Server 22.04+`
 # ROS
-* Зайти на распберри и установить `ROS2 Humble-ROS-base` стандартным способом
+* Зайти на распберри и установить `ROS2 Iron-ROS-base` стандартным способом
 * Настроить setup.bash стандартным образом
 # CAN
 * Включить CAN (описано тут https://wiki.seeedstudio.com/2-Channel-CAN-BUS-FD-Shield-for-Raspberry-Pi/#software)
@@ -125,8 +125,8 @@ Core/Src/syscalls.c \
 * Из корневой директории проекта:
 ```bash
 sudo service docker start
-docker pull microros/micro_ros_static_library_builder:humble
-docker run -it --rm -v $(pwd):/project --env MICROROS_LIBRARY_FOLDER=micro_ros_stm32cubemx_utils/microros_static_library microros/micro_ros_static_library_builder:humble
+docker pull microros/micro_ros_static_library_builder:iron
+docker run -it --rm -v $(pwd):/project --env MICROROS_LIBRARY_FOLDER=micro_ros_stm32cubemx_utils/microros_static_library microros/micro_ros_static_library_builder:iron
 ```
 
 ## Cube IDE
