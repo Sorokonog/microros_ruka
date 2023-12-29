@@ -16,6 +16,8 @@
 * `mkdir uros_ws && cd uros_ws` (Устанавливаем микророс описано тут: https://github.com/micro-ROS/micro_ros_setup)
 * `git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup`
 * `rosdep update && rosdep install --from-paths src --ignore-src -y`
+* `rosdep init`
+* `rosdep update`
 * `colcon build`
 * `source install/local_setup.bash`
 * `ros2 run micro_ros_setup create_agent_ws.sh`
