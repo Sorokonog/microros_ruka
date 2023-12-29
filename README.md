@@ -12,6 +12,7 @@
         `dtoverlay=seeed-can-fd-hat-v2`
 * Добавить в автозагрузку, например в `.bashrc`
         `sudo ip link set can0 up type can bitrate 1000000 dbitrate 8000000 restart-ms 1000 berr-reporting on fd on`
+*`sudo apt install can-utils`
 ## MicroROS Agent
 * `mkdir uros_ws && cd uros_ws` (Устанавливаем микророс описано тут: https://github.com/micro-ROS/micro_ros_setup)
 * `git clone -b $ROS_DISTRO https://github.com/micro-ROS/micro_ros_setup.git src/micro_ros_setup`
