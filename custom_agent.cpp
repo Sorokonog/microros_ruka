@@ -152,9 +152,7 @@ int main(int argc, char** argv)
 
         if(enable_canfd == 1)
         {
-            while ((time_ms() -  start) < timeout || rv > 0)
-            {
-                rv = poll(&poll_fd, 1, 10);
+                rv = poll(&poll_fd, 1, timeout);
                     if (rv > 0)
                     {
                         read(poll_fd.fd, &fdframe, sizeof(struct canfd_frame));
@@ -165,7 +163,6 @@ int main(int argc, char** argv)
                         : eprosima::uxr::TransportRc::server_error;
                         return fdframe.len;
                     }
-            }
         }
         else
         {
@@ -199,7 +196,7 @@ int main(int argc, char** argv)
         {
 
             ssize_t bytes_sent = 0;
-            fdframe.can_id = router_id;
+            fdframe.can_id = destination_endpoint->get_member<uint16_t>("ID") + 20;
 
             len_to_send = len_to_dlc(&message_length);
 
