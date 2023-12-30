@@ -44,9 +44,7 @@ int main(int argc, char** argv)
     
     struct pollfd poll_fd;
     struct sockaddr_can addr;
-    struct ifreq ifr;
-
-    uint32_t router_id = 127; 
+    struct ifreq ifr; 
 
     int enable_canfd = 1;
 
@@ -147,9 +145,7 @@ int main(int argc, char** argv)
         //struct can_frame raw_can_frame;
 
         uint16_t rv = 0;
-        int64_t start = time_ms();
-
-
+	    
         if(enable_canfd == 1)
         {
                 rv = poll(&poll_fd, 1, timeout);
