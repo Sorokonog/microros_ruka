@@ -44,7 +44,7 @@ int main(int argc, char** argv)
     
     struct pollfd poll_fd;
     struct sockaddr_can addr;
-    struct ifreq ifr; 
+    struct ifreq ifr;
 
     int enable_canfd = 1;
 
@@ -142,31 +142,28 @@ int main(int argc, char** argv)
             eprosima::uxr::TransportRc& transport_rc) -> ssize_t
     {
         struct canfd_frame fdframe;
-        //struct can_frame raw_can_frame;
-
         uint16_t rv = 0;
-	    
-        if(enable_canfd == 1)
+
+        rv = poll(&poll_fd, 1, timeout);
+
+        if (rv > 0)
+            {
+                read(poll_fd.fd, &fdframe, sizeof(struct canfd_frame));
+                memcpy(buffer,&(fdframe.data),fdframe.len);
+                source_endpoint->set_member_value<uint16_t>("ID",fdframe.can_id);
+                transport_rc = eprosima::uxr::TransportRc::ok;
+                return fdframe.len;
+            }
+        else if(rv == 0)
         {
-                rv = poll(&poll_fd, 1, timeout);
-                    if (rv > 0)
-                    {
-                        read(poll_fd.fd, &fdframe, sizeof(struct canfd_frame));
-                        memcpy(buffer,&(fdframe.data),fdframe.len);
-                        source_endpoint->set_member_value<uint16_t>("ID",fdframe.can_id);
-                        transport_rc = (-1 != rv)
-                        ? eprosima::uxr::TransportRc::ok
-                        : eprosima::uxr::TransportRc::server_error;
-                        return fdframe.len;
-                    }
+                transport_rc = eprosima::uxr::TransportRc::timeout_error;
+                return -1;
         }
         else
         {
-            std::cout<<"CAN RAW TODO"<<std::endl;
+            transport_rc = eprosima::uxr::TransportRc::server_error;
+            return -1;
         }
-
-        transport_rc = eprosima::uxr::TransportRc::timeout_error;
-        return -1;
     };
 
     /**
@@ -178,63 +175,52 @@ int main(int argc, char** argv)
         size_t message_length,
         eprosima::uxr::TransportRc& transport_rc) -> ssize_t
     {
+        //TODO CAN_RAW
 
         struct canfd_frame fdframe;
 
         uint8_t * ptr = buffer;
-        ssize_t rv;
-        uint8_t len_to_send=0;
-        uint8_t rest_to_send=0;
+        ssize_t rv = 0;
         uint8_t cycle = 0;
         size_t rest = 0;
-          
-        if(enable_canfd == 1)
-        {
-
-            ssize_t bytes_sent = 0;
-            fdframe.can_id = destination_endpoint->get_member<uint16_t>("ID") + 20;
-
-            len_to_send = len_to_dlc(&message_length);
-
-            cycle = message_length / len_to_send;
-            rest = message_length % len_to_send;
-
-            fdframe.len = len_to_send;
-
-            for(cycle; cycle>0; cycle--)
-            {
-                memcpy(&(fdframe.data), ptr, len_to_send);
-                rv = write(poll_fd.fd, &fdframe, sizeof(struct canfd_frame));
-                bytes_sent += len_to_send;
-                ptr += len_to_send;
-            }
-
-            while (rest != 0)
-            {
-                rest_to_send = len_to_dlc(&rest);
-                fdframe.len = rest_to_send;
-                rest -= rest_to_send;
-                memcpy(&(fdframe.data), ptr, rest_to_send);
-                rv = write(poll_fd.fd, &fdframe, sizeof(struct canfd_frame));
-                bytes_sent += rest_to_send;
-                ptr += rest_to_send;
-            }
-            if (rv == -1)  //TODO REMOVE CHECK FOR PERFORMANCE
-            {
-                perror("Error in sending messge in rest div");
-            }
         
-        transport_rc = (-1 != rv)
-        ? eprosima::uxr::TransportRc::ok
-        : eprosima::uxr::TransportRc::server_error;
-        return bytes_sent;
+        ssize_t bytes_sent = 0;
+        fdframe.can_id = destination_endpoint->get_member<uint16_t>("ID") + 20;
+
+        fdframe.len = len_to_dlc(&message_length);
+
+        cycle = message_length / fdframe.len;
+        rest = message_length % fdframe.len;
+
+        for(cycle; cycle>0; cycle--)
+        {
+            memcpy(&(fdframe.data), ptr, fdframe.len);
+            rv = write(poll_fd.fd, &fdframe, sizeof(struct canfd_frame));
+            bytes_sent += fdframe.len;
+            ptr += fdframe.len;
+        }
+        while (rest != 0)
+        {
+            fdframe.len = len_to_dlc(&rest);
+            rest -= fdframe.len;
+            memcpy(&(fdframe.data), ptr, fdframe.len);
+            rv = write(poll_fd.fd, &fdframe, sizeof(struct canfd_frame));
+            bytes_sent += fdframe.len;
+            ptr += fdframe.len;
+        }
+        if (rv > 0)
+        {
+            transport_rc = eprosima::uxr::TransportRc::ok;
+            return bytes_sent;
         }
         else
         {
-            return -1; //TODO CAN_RAW
+            transport_rc = eprosima::uxr::TransportRc::server_error;
+            return -1; 
         }
     };
 
+    
 
     /**
      * Run the main application.
@@ -262,7 +248,7 @@ int main(int argc, char** argv)
         /**
          * Set verbosity level
          */
-        custom_agent.set_verbose_level(0);
+        custom_agent.set_verbose_level(6);
 
         /**
          * Run agent and wait until receiving an stop signal.
